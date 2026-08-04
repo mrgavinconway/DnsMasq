@@ -1,11 +1,54 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>dnsmasq control</title><link rel="stylesheet" href="/style.css"></head>
-<body><main>
-  <header><div><p class="eyebrow">NETWORK CONTROL</p><h1>dnsmasq</h1></div><div id="status" class="status">Connecting…</div></header>
-  <nav aria-label="Sections"><button class="active" data-tab="leases">Leases <span id="lease-count">0</span></button><button data-tab="reservations">Reservations</button><button data-tab="dns">DNS records</button></nav>
-  <section id="leases" class="panel active"><div class="panel-head"><div><h2>Current leases</h2><p>Live clients reported by dnsmasq.</p></div><button class="secondary" id="refresh">Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Device</th><th>IP address</th><th>MAC address</th><th>Expires</th></tr></thead><tbody id="lease-rows"></tbody></table></div></section>
-  <section id="reservations" class="panel"><div class="panel-head"><div><h2>DHCP reservations</h2><p>Keep important devices on a predictable address.</p></div><button class="add" data-add="reservations">+ Add reservation</button></div><div id="reservation-rows" class="cards"></div></section>
-  <section id="dns" class="panel"><div class="panel-head"><div><h2>DNS records</h2><p>Local names resolved by this server.</p></div><button class="add" data-add="dns">+ Add record</button></div><div id="dns-rows" class="cards"></div></section>
-  <footer><span id="dirty">No unsaved changes</span><button id="save" disabled>Apply changes</button></footer>
-</main><template id="empty"><div class="empty">Nothing here yet.</div></template><script src="/app.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#123e2a">
+  <title>HomeLAN · dnsmasq</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand"><span class="brand-mark" aria-hidden="true">H</span><div><p class="eyebrow">HOMELAN</p><h1>Network directory</h1></div></div>
+    <div id="status" class="status" role="status"><span></span>Connecting…</div>
+  </header>
+
+  <section class="summary" aria-label="Network summary">
+    <div><strong id="lease-count">—</strong><span>Active leases</span></div>
+    <div><strong id="reservation-count">—</strong><span>Reservations</span></div>
+    <div><strong id="dns-count">—</strong><span>DNS records</span></div>
+    <p id="updated">Waiting for dnsmasq</p>
+  </section>
+
+  <nav aria-label="Network records">
+    <button class="active" data-tab="leases">Leases</button>
+    <button data-tab="reservations">Reservations</button>
+    <button data-tab="dns">DNS records</button>
+  </nav>
+
+  <section id="leases" class="panel active">
+    <div class="panel-head"><div><h2>Devices on your network</h2><p>Live leases reported by dnsmasq.</p></div><button class="secondary" id="refresh">Refresh</button></div>
+    <div class="toolbar"><label class="search"><span class="sr-only">Filter leases</span><input id="lease-filter" type="search" placeholder="Search device, IP or MAC…" autocomplete="off"></label></div>
+    <div class="table-wrap"><table><thead><tr><th>Device</th><th>IP address</th><th>MAC address</th><th>Lease</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="lease-rows"><tr><td colspan="5" class="loading">Loading leases…</td></tr></tbody></table></div>
+  </section>
+
+  <section id="reservations" class="panel">
+    <div class="panel-head"><div><h2>DHCP reservations</h2><p>Keep important devices at a predictable address.</p></div><button class="primary" data-add="reservations">Add reservation</button></div>
+    <div id="reservation-rows" class="cards"></div>
+  </section>
+
+  <section id="dns" class="panel">
+    <div class="panel-head"><div><h2>Local DNS records</h2><p>Friendly names resolved inside your home network.</p></div><button class="primary" data-add="dns">Add record</button></div>
+    <div id="dns-rows" class="cards"></div>
+  </section>
+</main>
+
+<footer id="savebar" class="savebar">
+  <div><strong id="dirty">No unsaved changes</strong><span id="save-note">dnsmasq is up to date</span></div>
+  <div class="footer-actions"><button id="discard" class="secondary" disabled>Discard</button><button id="save" class="primary" disabled>Apply changes</button></div>
+</footer>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="/app.js"></script>
+</body>
+</html>
