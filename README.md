@@ -15,7 +15,12 @@ The installer places the application under `/opt/dnsmasq-web`, starts it immedia
 
 Restrict port 80 to your trusted LAN. Every device that can reach the page can change dnsmasq settings. Never expose it directly to the internet; use a VPN if remote access is ever needed.
 
-The service manages `/etc/dnsmasq.d/web-reservations.conf` and `/etc/dnsmasq.d/web-dns.conf`. Existing dnsmasq files are left untouched. Ensure your main dnsmasq configuration loads `/etc/dnsmasq.d/*.conf` (the Raspberry Pi OS package does by default).
+The service manages `/etc/homelan-reservations` in dnsmasq `dhcp-hostsfile` format and `/etc/homelan-hosts` in standard hosts-file format. Configure dnsmasq to load them:
+
+```ini
+dhcp-hostsfile=/etc/homelan-reservations
+addn-hosts=/etc/homelan-hosts
+```
 
 ## Configuration
 

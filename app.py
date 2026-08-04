@@ -58,23 +58,51 @@ def valid_name(value: object) -> str:
     return value
 
 
-def read_managed(path: Path, prefix: str) -> list[dict[str, str]]:
+def read_reservations(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         return []
     rows = []
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
-        if not line or line.startswith("#") or not line.startswith(prefix):
+        if not line or line.startswith("#"):
             continue
-        value = line[len(prefix):]
-        if prefix == "dhcp-host=":
-            parts = [p.strip() for p in value.split(",")]
-            if len(parts) >= 3:
-                rows.append({"mac": parts[0], "ip": parts[1], "hostname": parts[2]})
-        elif prefix == "address=/":
-            parts = value.rsplit("/", 1)
+        value = line.removeprefix("dhcp-host=")
+        parts = [p.strip() for p in value.split(",")]
+        if len(parts) >= 2:
+            ip_index = next((i for i, part in enumerate(parts) if is_ip(part)), None)
+            mac_index = next((i for i, part in enumerate(parts) if MAC_RE.fullmatch(part)), None)
+            if ip_index is not None and mac_index is not None:
+                hostname = next((part for i, part in enumerate(parts)
+                                 if i not in (ip_index, mac_index) and NAME_RE.fullmatch(part)), "")
+                rows.append({"mac": parts[mac_index].lower(), "ip": parts[ip_index], "hostname": hostname})
+    return rows
+
+
+def is_ip(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value)
+        return True
+    except ValueError:
+        return False
+
+
+def read_dns(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("address=/"):
+            parts = line[len("address=/"):].rsplit("/", 1)
             if len(parts) == 2:
                 rows.append({"hostname": parts[0].rstrip("/"), "ip": parts[1]})
+        else:
+            parts = line.split()
+            if len(parts) >= 2 and is_ip(parts[0]):
+                for hostname in parts[1:]:
+                    rows.append({"hostname": hostname, "ip": parts[0]})
     return rows
 
 
@@ -107,7 +135,7 @@ def render_reservations(rows: list[dict[str, object]]) -> str:
         if mac in seen_mac or ip in seen_ip:
             raise ValueError("MAC and IP addresses must be unique")
         seen_mac.add(mac); seen_ip.add(ip)
-        lines.append(f"dhcp-host={mac},{ip},{hostname}")
+        lines.append(f"{mac},{hostname},{ip}")
     return "\n".join(lines) + "\n"
 
 
@@ -119,7 +147,7 @@ def render_dns(rows: list[dict[str, object]]) -> str:
         if hostname in seen:
             raise ValueError("DNS hostnames must be unique")
         seen.add(hostname)
-        lines.append(f"address=/{hostname}/{ip}")
+        lines.append(f"{ip}\t{hostname}")
     return "\n".join(lines) + "\n"
 
 
@@ -172,8 +200,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if urlparse(self.path).path == "/api/state":
-            self.reply(200, {"reservations": read_managed(self.settings.reservations, "dhcp-host="),
-                             "dns": read_managed(self.settings.dns, "address=/"),
+            self.reply(200, {"reservations": read_reservations(self.settings.reservations),
+                             "dns": read_dns(self.settings.dns),
                              "leases": read_leases(self.settings.leases)})
             return
         super().do_GET()
@@ -200,8 +228,8 @@ def main() -> None:
     parser.add_argument("--host", default=os.getenv("DNSMASQ_WEB_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.getenv("DNSMASQ_WEB_PORT", "8080")))
     args = parser.parse_args()
-    settings = Settings(Path(os.getenv("DNSMASQ_WEB_RESERVATIONS", "/etc/dnsmasq.d/web-reservations.conf")),
-                        Path(os.getenv("DNSMASQ_WEB_DNS", "/etc/dnsmasq.d/web-dns.conf")),
+    settings = Settings(Path(os.getenv("DNSMASQ_WEB_RESERVATIONS", "/etc/homelan-reservations")),
+                        Path(os.getenv("DNSMASQ_WEB_DNS", "/etc/homelan-hosts")),
                         Path(os.getenv("DNSMASQ_WEB_LEASES", "/var/lib/misc/dnsmasq.leases")),
                         os.getenv("DNSMASQ_WEB_BINARY", shutil.which("dnsmasq") or "/usr/sbin/dnsmasq"),
                         os.getenv("DNSMASQ_WEB_RESTART", "systemctl reload-or-restart dnsmasq").split())

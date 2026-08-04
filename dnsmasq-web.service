@@ -16,7 +16,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/etc/dnsmasq.d
+ReadWritePaths=/etc/homelan-hosts /etc/homelan-reservations
 
 [Install]
 WantedBy=multi-user.target
