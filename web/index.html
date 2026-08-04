@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>dnsmasq control</title><link rel="stylesheet" href="/style.css"></head>
+<body><main>
+  <header><div><p class="eyebrow">NETWORK CONTROL</p><h1>dnsmasq</h1></div><div id="status" class="status">Connecting…</div></header>
+  <nav aria-label="Sections"><button class="active" data-tab="leases">Leases <span id="lease-count">0</span></button><button data-tab="reservations">Reservations</button><button data-tab="dns">DNS records</button></nav>
+  <section id="leases" class="panel active"><div class="panel-head"><div><h2>Current leases</h2><p>Live clients reported by dnsmasq.</p></div><button class="secondary" id="refresh">Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Device</th><th>IP address</th><th>MAC address</th><th>Expires</th></tr></thead><tbody id="lease-rows"></tbody></table></div></section>
+  <section id="reservations" class="panel"><div class="panel-head"><div><h2>DHCP reservations</h2><p>Keep important devices on a predictable address.</p></div><button class="add" data-add="reservations">+ Add reservation</button></div><div id="reservation-rows" class="cards"></div></section>
+  <section id="dns" class="panel"><div class="panel-head"><div><h2>DNS records</h2><p>Local names resolved by this server.</p></div><button class="add" data-add="dns">+ Add record</button></div><div id="dns-rows" class="cards"></div></section>
+  <footer><span id="dirty">No unsaved changes</span><button id="save" disabled>Apply changes</button></footer>
+</main><template id="empty"><div class="empty">Nothing here yet.</div></template><script src="/app.js"></script></body></html>

@@ -1,0 +1,22 @@
+[Unit]
+Description=Lightweight dnsmasq web interface
+After=network.target dnsmasq.service
+Requires=dnsmasq.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/dnsmasq-web
+ExecStart=/usr/bin/python3 /opt/dnsmasq-web/app.py --host 0.0.0.0 --port 80
+EnvironmentFile=-/etc/default/dnsmasq-web
+Restart=on-failure
+RestartSec=3
+UMask=0022
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/etc/dnsmasq.d
+
+[Install]
+WantedBy=multi-user.target
