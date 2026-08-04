@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import tempfile
 import threading
@@ -124,6 +125,51 @@ def read_leases(path: Path) -> list[dict[str, object]]:
     return sorted(rows, key=lambda row: str(row["ip"]))
 
 
+def read_number(path: Path, divisor: float = 1) -> float | None:
+    try:
+        value = path.read_text(encoding="utf-8").strip().split()[0]
+        return round(float(value) / divisor, 1)
+    except (OSError, ValueError):
+        return None
+
+
+def system_stats() -> dict[str, object]:
+    """Read lightweight health data from Linux virtual filesystems."""
+    temperature = None
+    for path in (Path("/sys/class/thermal/thermal_zone0/temp"),
+                 Path("/sys/devices/virtual/thermal/thermal_zone0/temp")):
+        temperature = read_number(path, 1000)
+        if temperature is not None:
+            break
+
+    memory_percent = None
+    try:
+        values = {}
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            key, value = line.split(":", 1)
+            values[key] = int(value.strip().split()[0])
+        total, available = values["MemTotal"], values["MemAvailable"]
+        memory_percent = round((total - available) / total * 100, 1)
+    except (OSError, ValueError, KeyError, ZeroDivisionError):
+        pass
+
+    try:
+        load = round(os.getloadavg()[0], 2)
+    except (AttributeError, OSError):
+        load = None
+    cpu_count = os.cpu_count() or 1
+    load_percent = round(load / cpu_count * 100, 1) if load is not None else None
+    uptime = read_number(Path("/proc/uptime"))
+    try:
+        disk = shutil.disk_usage("/")
+        disk_percent = round(disk.used / disk.total * 100, 1)
+    except (OSError, ZeroDivisionError):
+        disk_percent = None
+    return {"hostname": socket.gethostname(), "temperature": temperature, "load": load,
+            "loadPercent": load_percent, "cpuCount": cpu_count, "memoryPercent": memory_percent,
+            "diskPercent": disk_percent, "uptime": uptime}
+
+
 def render_reservations(rows: list[dict[str, object]]) -> str:
     seen_mac, seen_ip = set(), set()
     lines = ["# Managed by dnsmasq-web. Manual changes may be overwritten."]
@@ -202,7 +248,8 @@ class Handler(SimpleHTTPRequestHandler):
         if urlparse(self.path).path == "/api/state":
             self.reply(200, {"reservations": read_reservations(self.settings.reservations),
                              "dns": read_dns(self.settings.dns),
-                             "leases": read_leases(self.settings.leases)})
+                             "leases": read_leases(self.settings.leases),
+                             "system": system_stats()})
             return
         super().do_GET()
 

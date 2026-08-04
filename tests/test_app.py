@@ -39,6 +39,22 @@ class ConfigTests(unittest.TestCase):
             rows = app.read_leases(path)
             self.assertEqual(rows[0]["hostname"], "laptop")
 
+    def test_system_stats_shape(self):
+        stats = app.system_stats()
+        self.assertIn("temperature", stats)
+        self.assertIn("memoryPercent", stats)
+        self.assertIn("diskPercent", stats)
+        self.assertGreaterEqual(stats["cpuCount"], 1)
+
+    def test_read_number_missing(self):
+        self.assertIsNone(app.read_number(Path("/definitely/not/a/real/file")))
+
+    def test_read_number_uses_first_value(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "uptime"
+            path.write_text("12345.67 9876.54\n")
+            self.assertEqual(app.read_number(path), 12345.7)
+
 
 if __name__ == "__main__":
     unittest.main()

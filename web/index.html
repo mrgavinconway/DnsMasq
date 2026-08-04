@@ -21,6 +21,15 @@
     <p id="updated">Waiting for dnsmasq</p>
   </section>
 
+  <section class="health" aria-labelledby="health-title">
+    <div class="health-intro"><div class="health-orb" id="health-orb"><span></span></div><div><p class="eyebrow">PI HEALTH</p><h2 id="health-title">System nominal</h2><p id="health-detail">Collecting hardware status…</p></div></div>
+    <div class="metric"><div class="metric-head"><span>Temperature</span><strong id="temperature">—</strong></div><div class="meter"><i id="temperature-bar"></i></div></div>
+    <div class="metric"><div class="metric-head"><span>CPU load</span><strong id="load">—</strong></div><div class="meter"><i id="load-bar"></i></div></div>
+    <div class="metric"><div class="metric-head"><span>Memory</span><strong id="memory">—</strong></div><div class="meter"><i id="memory-bar"></i></div></div>
+    <div class="metric"><div class="metric-head"><span>Storage</span><strong id="storage">—</strong></div><div class="meter"><i id="storage-bar"></i></div></div>
+    <div class="uptime"><span>Uptime</span><strong id="uptime">—</strong></div>
+  </section>
+
   <nav aria-label="Network records">
     <button class="active" data-tab="leases">Leases</button>
     <button data-tab="reservations">Reservations</button>

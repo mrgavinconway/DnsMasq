@@ -6,6 +6,13 @@ const config=()=>({reservations:state.reservations,dns:state.dns});
 const snapshot=()=>JSON.stringify(config());
 
 function duration(seconds){if(seconds<=0)return'Expired';const m=Math.floor(seconds/60);if(m<60)return`${m}m`;const h=Math.floor(m/60);return h<24?`${h}h ${m%60}m`:`${Math.floor(h/24)}d ${h%24}h`}
+function uptime(seconds){if(seconds==null)return'Unavailable';const d=Math.floor(seconds/86400),h=Math.floor(seconds%86400/3600);return d?`${d}d ${h}h`:`${h}h`}
+function setMetric(id,value,label,warn,danger){const text=$('#'+id),bar=$('#'+id+'-bar');text.textContent=value==null?'—':label(value);if(!bar)return;bar.style.width=`${Math.min(100,value??0)}%`;bar.className=value>=danger?'danger':value>=warn?'warn':''}
+function renderHealth(){
+ const s=state.system||{};setMetric('temperature',s.temperature,v=>`${v.toFixed(1)}°C`,70,80);setMetric('load',s.loadPercent,v=>`${Math.round(v)}%`,75,100);setMetric('memory',s.memoryPercent,v=>`${Math.round(v)}%`,80,92);setMetric('storage',s.diskPercent,v=>`${Math.round(v)}%`,80,92);$('#uptime').textContent=uptime(s.uptime);
+ const issues=[];if(s.temperature>=80)issues.push('CPU temperature is critical');else if(s.temperature>=70)issues.push('CPU is running warm');if(s.loadPercent>=100)issues.push('CPU load is high');if(s.memoryPercent>=92)issues.push('Memory is nearly full');if(s.diskPercent>=92)issues.push('Storage is nearly full');
+ const health=$('.health');health.className=`health${issues.some(x=>x.includes('critical')||x.includes('nearly'))?' danger':issues.length?' warn':''}`;$('#health-title').textContent=issues.length?'Attention recommended':'System nominal';$('#health-detail').textContent=issues.join(' · ')||(s.hostname?`${s.hostname} is running normally`:'No hardware issues detected');
+}
 function notify(message,error=false){const el=$('#toast');el.textContent=message;el.className=`toast show${error?' error':''}`;clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.className='toast',2800)}
 function setDirty(){dirty=snapshot()!==baseline;$('#dirty').textContent=dirty?'Changes ready to apply':'No unsaved changes';$('#save-note').textContent=dirty?'Review then apply to dnsmasq':'dnsmasq is up to date';$('#save').disabled=!dirty;$('#discard').disabled=!dirty}
 function field(label,key,value,placeholder){return`<div class="field"><label>${label}</label><input data-key="${key}" value="${esc(value)}" placeholder="${placeholder}" autocomplete="off"></div>`}
@@ -18,6 +25,7 @@ function renderLeases(){
 }
 function render(){
  $('#lease-count').textContent=state.leases.length;$('#reservation-count').textContent=state.reservations.length;$('#dns-count').textContent=state.dns.length;
+ renderHealth();
  renderLeases();
  $('#reservation-rows').innerHTML=state.reservations.map((x,i)=>`<div class="record" data-index="${i}" data-kind="reservations">${field('Hostname','hostname',x.hostname,'printer')}${field('IP address','ip',x.ip,'192.168.1.20')}${field('MAC address','mac',x.mac,'aa:bb:cc:dd:ee:ff')}<button class="remove" aria-label="Remove ${esc(x.hostname||'reservation')}">Remove</button></div>`).join('')||'<div class="empty">No reservations yet. Reserve a live device or add one manually.</div>';
  $('#dns-rows').innerHTML=state.dns.map((x,i)=>`<div class="record dns" data-index="${i}" data-kind="dns">${field('Hostname','hostname',x.hostname,'nas.home')}${field('IP address','ip',x.ip,'192.168.1.10')}<button class="remove" aria-label="Remove ${esc(x.hostname||'DNS record')}">Remove</button></div>`).join('')||'<div class="empty">No local DNS records yet.</div>';
