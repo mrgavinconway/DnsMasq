@@ -22,6 +22,8 @@ dhcp-hostsfile=/etc/homelan-reservations
 addn-hosts=/etc/homelan-hosts
 ```
 
+Saves use temporary sibling files under `/etc` so both configuration files can be replaced atomically. The systemd unit grants the service write access to `/etc` for this purpose; the application itself only targets the two configured files.
+
 ## Configuration
 
 All settings are optional environment variables: `DNSMASQ_WEB_HOST`, `DNSMASQ_WEB_PORT`, `DNSMASQ_WEB_RESERVATIONS`, `DNSMASQ_WEB_DNS`, `DNSMASQ_WEB_LEASES`, `DNSMASQ_WEB_BINARY`, and `DNSMASQ_WEB_RESTART`.

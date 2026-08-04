@@ -16,7 +16,9 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/etc/homelan-hosts /etc/homelan-reservations
+# Atomic replacement creates a temporary sibling before renaming it over the
+# target, so the containing directory must be writable inside the sandbox.
+ReadWritePaths=/etc
 
 [Install]
 WantedBy=multi-user.target
