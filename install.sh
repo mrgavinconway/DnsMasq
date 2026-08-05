@@ -38,6 +38,7 @@ install -m 0644 "$SCRIPT_DIR/web/index.html" "$APP_DIR/web/index.html"
 install -m 0644 "$SCRIPT_DIR/web/style.css" "$APP_DIR/web/style.css"
 install -m 0644 "$SCRIPT_DIR/web/vendor.css" "$APP_DIR/web/vendor.css"
 install -m 0644 "$SCRIPT_DIR/web/logs.css" "$APP_DIR/web/logs.css"
+install -m 0644 "$SCRIPT_DIR/web/enhancements.css" "$APP_DIR/web/enhancements.css"
 install -m 0644 "$SCRIPT_DIR/web/app.js" "$APP_DIR/web/app.js"
 install -m 0644 "$SCRIPT_DIR/dnsmasq-web.service" "$UNIT"
 if git -C "$SCRIPT_DIR" rev-parse HEAD >/dev/null 2>&1; then

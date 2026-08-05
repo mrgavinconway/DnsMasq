@@ -17,7 +17,9 @@ Running the installer again upgrades the existing installation and restarts the 
 
 The leases table shows each MAC address's registered manufacturer and vendor names are searchable alongside devices, IPs, and MACs. Lookups use Debian's local `ieee-data` database, installed automatically, so MAC addresses are never sent to an external service. Randomized/private MAC addresses are identified as such.
 
-The Logs tab streams recent and live journal entries from `dnsmasq.service` and `dnsmasq-web.service`. It keeps at most 1,000 lines in the browser and supports pausing and clearing the view without changing the system journal.
+The Logs tab streams recent and live journal entries from `dnsmasq.service` and `dnsmasq-web.service`. It keeps at most 1,000 lines in the browser and supports searching, pausing, and clearing the view without changing the system journal.
+
+Lease columns can be sorted in either direction by selecting their headings. DHCP reservations support optional comments, stored as encoded metadata comments beside the corresponding dnsmasq entry so the reservation file remains valid.
 
 The Updates panel checks the GitHub `main` branch and can install it directly. Updates run as a separate transient systemd job, allowing the web service to restart safely during its own upgrade.
 

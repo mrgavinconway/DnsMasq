@@ -1,5 +1,6 @@
 let state={reservations:[],dns:[],leases:[]};
-let baseline='',dirty=false,toastTimer,logSource=null,logPaused=false,updatePoll=null;
+let baseline='',dirty=false,toastTimer,logSource=null,logPaused=false,updatePoll=null,logLines=[],logQuery='';
+let leaseSort={key:'hostname',direction:1};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const config=()=>({reservations:state.reservations,dns:state.dns});
@@ -15,19 +16,20 @@ function renderHealth(){
 }
 function notify(message,error=false){const el=$('#toast');el.textContent=message;el.className=`toast show${error?' error':''}`;clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.className='toast',2800)}
 function setDirty(){dirty=snapshot()!==baseline;$('#dirty').textContent=dirty?'Changes ready to apply':'No unsaved changes';$('#save-note').textContent=dirty?'Review then apply to dnsmasq':'dnsmasq is up to date';$('#save').disabled=!dirty;$('#discard').disabled=!dirty}
-function field(label,key,value,placeholder){return`<div class="field"><label>${label}</label><input data-key="${key}" value="${esc(value)}" placeholder="${placeholder}" autocomplete="off"></div>`}
+function field(label,key,value,placeholder,optional=false){return`<div class="field"><label>${label}</label><input data-key="${key}" ${optional?'data-optional="true"':''} value="${esc(value)}" placeholder="${placeholder}" autocomplete="off"></div>`}
 function isReserved(lease){return state.reservations.some(r=>r.mac.toLowerCase()===lease.mac.toLowerCase()||r.ip===lease.ip)}
-function filteredLeases(){const q=$('#lease-filter').value.trim().toLowerCase();return q?state.leases.filter(x=>[x.hostname,x.ip,x.mac,x.vendor].some(v=>String(v).toLowerCase().includes(q))):state.leases}
+function filteredLeases(){const q=$('#lease-filter').value.trim().toLowerCase(),rows=q?state.leases.filter(x=>[x.hostname,x.ip,x.mac,x.vendor].some(v=>String(v).toLowerCase().includes(q))):[...state.leases];return rows.sort((a,b)=>{const av=a[leaseSort.key]??'',bv=b[leaseSort.key]??'';const result=typeof av==='number'?av-bv:String(av).localeCompare(String(bv),undefined,{numeric:true,sensitivity:'base'});return result*leaseSort.direction})}
 
 function renderLeases(){
  const rows=filteredLeases();
+ document.querySelectorAll('[data-sort]').forEach(button=>button.closest('th').removeAttribute('aria-sort'));const active=document.querySelector(`[data-sort="${leaseSort.key}"]`);active?.closest('th').setAttribute('aria-sort',leaseSort.direction===1?'ascending':'descending');
  $('#lease-rows').innerHTML=rows.map(x=>{const reserved=isReserved(x),initial=(x.hostname||'?')[0];return`<tr><td><div class="device"><span class="device-icon">${esc(initial)}</span><strong>${esc(x.hostname||'Unknown device')}</strong></div></td><td class="mono">${esc(x.ip)}</td><td class="mono">${esc(x.mac)}</td><td class="vendor-name" title="${esc(x.vendor||'Vendor not found')}">${esc(x.vendor||'Vendor not found')}</td><td><span class="lease-time">${duration(x.remaining)}</span></td><td>${reserved?'<span class="reserved">Reserved</span>':`<button class="reserve" data-mac="${esc(x.mac)}" data-ip="${esc(x.ip)}" data-host="${esc(x.hostname)}">Reserve</button>`}</td></tr>`}).join('')||'<tr><td colspan="6" class="loading">No matching leases.</td></tr>';
 }
 function render(){
  $('#lease-count').textContent=state.leases.length;$('#reservation-count').textContent=state.reservations.length;$('#dns-count').textContent=state.dns.length;
  renderHealth();
  renderLeases();
- $('#reservation-rows').innerHTML=state.reservations.map((x,i)=>`<div class="record" data-index="${i}" data-kind="reservations">${field('Hostname','hostname',x.hostname,'printer')}${field('IP address','ip',x.ip,'192.168.1.20')}${field('MAC address','mac',x.mac,'aa:bb:cc:dd:ee:ff')}<button class="remove" aria-label="Remove ${esc(x.hostname||'reservation')}">Remove</button></div>`).join('')||'<div class="empty">No reservations yet. Reserve a live device or add one manually.</div>';
+ $('#reservation-rows').innerHTML=state.reservations.map((x,i)=>`<div class="record" data-index="${i}" data-kind="reservations">${field('Hostname','hostname',x.hostname,'printer')}${field('IP address','ip',x.ip,'192.168.1.20')}${field('MAC address','mac',x.mac,'aa:bb:cc:dd:ee:ff')}${field('Comment','comment',x.comment||'','Office printer',true)}<button class="remove" aria-label="Remove ${esc(x.hostname||'reservation')}">Remove</button></div>`).join('')||'<div class="empty">No reservations yet. Reserve a live device or add one manually.</div>';
  $('#dns-rows').innerHTML=state.dns.map((x,i)=>`<div class="record dns" data-index="${i}" data-kind="dns">${field('Hostname','hostname',x.hostname,'nas.home')}${field('IP address','ip',x.ip,'192.168.1.10')}<button class="remove" aria-label="Remove ${esc(x.hostname||'DNS record')}">Remove</button></div>`).join('')||'<div class="empty">No local DNS records yet.</div>';
  setDirty();
 }
@@ -37,9 +39,11 @@ async function load(showNotice=false){
  catch(e){$('#status').innerHTML=`<span></span>${esc(e.message)}`;$('#status').className='status bad';notify(e.message,true)}finally{refresh.disabled=false}
 }
 function showTab(name){document.querySelectorAll('nav button,.panel').forEach(x=>x.classList.remove('active'));document.querySelector(`[data-tab="${name}"]`).classList.add('active');$('#'+name).classList.add('active');if(name==='logs'){if(!logPaused)startLogs();checkUpdate()}}
-function addReservation(button){const mac=button.dataset.mac,ip=button.dataset.ip,hostname=button.dataset.host||'';state.reservations.push({hostname,ip,mac});render();showTab('reservations');const input=document.querySelector('#reservation-rows .record:last-child input');input?.focus();notify(`${hostname||ip} added as a reservation`)}
+function addReservation(button){const mac=button.dataset.mac,ip=button.dataset.ip,hostname=button.dataset.host||'';state.reservations.push({hostname,ip,mac,comment:''});render();showTab('reservations');const input=document.querySelector('#reservation-rows .record:last-child input');input?.focus();notify(`${hostname||ip} added as a reservation`)}
 function logStatus(message,state=''){$('#log-status').className=state;$('#log-status').innerHTML=`<i></i>${esc(message)}`;$('#log-live').textContent=state==='connected'?'Live':state==='disconnected'?'Retrying':'Paused'}
-function appendLog(line){const consoleEl=$('#log-console'),follow=consoleEl.scrollHeight-consoleEl.scrollTop-consoleEl.clientHeight<80;$('#log-empty')?.remove();const row=document.createElement('div');row.className=`log-line${/error|failed|failure|fatal/i.test(line)?' error':/warn|denied|timeout/i.test(line)?' warning':''}`;row.textContent=line;consoleEl.appendChild(row);while(consoleEl.children.length>1000)consoleEl.firstElementChild.remove();if(follow)consoleEl.scrollTop=consoleEl.scrollHeight}
+function logRow(line){const row=document.createElement('div');row.className=`log-line${/error|failed|failure|fatal/i.test(line)?' error':/warn|denied|timeout/i.test(line)?' warning':''}`;row.textContent=line;return row}
+function renderLogs(){const consoleEl=$('#log-console'),matches=logQuery?logLines.filter(line=>line.toLowerCase().includes(logQuery)):logLines;consoleEl.replaceChildren(...matches.map(logRow));if(!matches.length){const empty=document.createElement('div');empty.className='log-empty';empty.id='log-empty';empty.textContent=logQuery?'No matching log entries.':'Waiting for new log entries…';consoleEl.appendChild(empty)}$('#log-matches').textContent=logQuery?`${matches.length} matching ${logLines.length} lines`:'';consoleEl.scrollTop=consoleEl.scrollHeight}
+function appendLog(line){const consoleEl=$('#log-console'),follow=consoleEl.scrollHeight-consoleEl.scrollTop-consoleEl.clientHeight<80;logLines.push(line);if(logLines.length>1000)logLines.shift();if(!logQuery||line.toLowerCase().includes(logQuery)){$('#log-empty')?.remove();consoleEl.appendChild(logRow(line));while(consoleEl.children.length>1000)consoleEl.firstElementChild.remove();if(follow)consoleEl.scrollTop=consoleEl.scrollHeight}if(logQuery)$('#log-matches').textContent=`${logLines.filter(item=>item.toLowerCase().includes(logQuery)).length} matching ${logLines.length} lines`}
 function startLogs(){if(logSource)return;logPaused=false;$('#log-pause').textContent='Pause';logStatus('Connecting…');logSource=new EventSource('/api/logs');logSource.onopen=()=>logStatus('Streaming live','connected');logSource.onmessage=e=>appendLog(JSON.parse(e.data));logSource.onerror=()=>logStatus('Connection lost — retrying','disconnected')}
 function stopLogs(){if(logSource){logSource.close();logSource=null}logPaused=true;$('#log-pause').textContent='Resume';logStatus('Paused')}
 function shortVersion(value){return value&&value!=='development'?value.slice(0,7):value||'unknown'}
@@ -53,19 +57,23 @@ async function applyUpdate(){if(dirty){notify('Apply or discard configuration ch
 
 document.addEventListener('click',e=>{
  const tab=e.target.closest('[data-tab]');if(tab)showTab(tab.dataset.tab);
- const add=e.target.closest('[data-add]');if(add){state[add.dataset.add].push(add.dataset.add==='dns'?{hostname:'',ip:''}:{hostname:'',ip:'',mac:''});render();document.querySelector(`#${add.dataset.add==='dns'?'dns':'reservation'}-rows .record:last-child input`)?.focus()}
+ const add=e.target.closest('[data-add]');if(add){state[add.dataset.add].push(add.dataset.add==='dns'?{hostname:'',ip:''}:{hostname:'',ip:'',mac:'',comment:''});render();document.querySelector(`#${add.dataset.add==='dns'?'dns':'reservation'}-rows .record:last-child input`)?.focus()}
  const rm=e.target.closest('.remove');if(rm){const row=rm.closest('.record');state[row.dataset.kind].splice(+row.dataset.index,1);render()}
  const reserve=e.target.closest('.reserve');if(reserve)addReservation(reserve);
+ const sort=e.target.closest('[data-sort]');if(sort){const key=sort.dataset.sort;leaseSort=leaseSort.key===key?{key,direction:-leaseSort.direction}:{key,direction:1};renderLeases()}
 });
 document.addEventListener('input',e=>{const row=e.target.closest('.record');if(row){state[row.dataset.kind][+row.dataset.index][e.target.dataset.key]=e.target.value;e.target.classList.remove('invalid');setDirty()}if(e.target.id==='lease-filter')renderLeases()});
 $('#refresh').onclick=()=>{if(dirty){notify('Apply or discard changes before refreshing',true);return}load(true)};
 $('#log-pause').onclick=()=>logPaused?startLogs():stopLogs();
-$('#log-clear').onclick=()=>{$('#log-console').innerHTML='<div class="log-empty" id="log-empty">Waiting for new log entries…</div>'};
+$('#log-clear').onclick=()=>{logLines=[];renderLogs()};
+$('#log-search').onclick=()=>{logQuery=$('#log-filter').value.trim().toLowerCase();$('#log-search-clear').disabled=!logQuery;renderLogs()};
+$('#log-search-clear').onclick=()=>{$('#log-filter').value='';logQuery='';$('#log-search-clear').disabled=true;renderLogs()};
+$('#log-filter').addEventListener('keydown',e=>{if(e.key==='Enter')$('#log-search').click()});
 $('#update-check').onclick=()=>checkUpdate();
 $('#update-apply').onclick=applyUpdate;
 $('#discard').onclick=()=>load().then(()=>notify('Changes discarded'));
 $('#save').onclick=async()=>{
- const invalid=[...document.querySelectorAll('.record input')].filter(x=>!x.value.trim());invalid.forEach(x=>x.classList.add('invalid'));if(invalid.length){invalid[0].focus();notify('Complete all fields before applying',true);return}
+ const invalid=[...document.querySelectorAll('.record input:not([data-optional])')].filter(x=>!x.value.trim());invalid.forEach(x=>x.classList.add('invalid'));if(invalid.length){invalid[0].focus();notify('Complete all required fields before applying',true);return}
  const button=$('#save');button.disabled=true;button.textContent='Applying…';
  try{const r=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(config())});const out=await r.json();if(!r.ok)throw Error(out.error||'Apply failed');baseline=snapshot();setDirty();await load();notify('Changes applied — dnsmasq reloaded')}
  catch(e){notify(e.message,true);$('#save-note').textContent=e.message;button.disabled=false}finally{button.textContent='Apply changes'}

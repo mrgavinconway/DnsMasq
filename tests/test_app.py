@@ -7,8 +7,9 @@ import app
 
 class ConfigTests(unittest.TestCase):
     def test_reservations(self):
-        text = app.render_reservations([{"hostname": "printer", "ip": "192.168.1.20", "mac": "AA:BB:CC:DD:EE:FF"}])
+        text = app.render_reservations([{"hostname": "printer", "ip": "192.168.1.20", "mac": "AA:BB:CC:DD:EE:FF", "comment": "Office printer"}])
         self.assertIn("aa:bb:cc:dd:ee:ff,printer,192.168.1.20", text)
+        self.assertIn("# dnsmasq-web-note:", text)
 
     def test_duplicate_ip_rejected(self):
         with self.assertRaises(ValueError):
@@ -30,7 +31,14 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "reservations"
             path.write_text("aa:bb:cc:dd:ee:ff,printer,192.168.1.20\n")
-            self.assertEqual(app.read_reservations(path), [{"mac": "aa:bb:cc:dd:ee:ff", "ip": "192.168.1.20", "hostname": "printer"}])
+            self.assertEqual(app.read_reservations(path), [{"mac": "aa:bb:cc:dd:ee:ff", "ip": "192.168.1.20", "hostname": "printer", "comment": ""}])
+
+    def test_reservation_comment_round_trip(self):
+        rows = [{"mac": "a8:bb:cc:00:00:01", "ip": "10.0.0.9", "hostname": "camera", "comment": "Front door — PoE"}]
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "reservations"
+            path.write_text(app.render_reservations(rows))
+            self.assertEqual(app.read_reservations(path), rows)
 
     def test_leases(self):
         with tempfile.TemporaryDirectory() as folder:

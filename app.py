@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import ipaddress
 import json
 import os
@@ -69,8 +70,16 @@ def read_reservations(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         return []
     rows = []
+    pending_comment = ""
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
+        if line.startswith("# dnsmasq-web-note: "):
+            try:
+                encoded = line.removeprefix("# dnsmasq-web-note: ")
+                pending_comment = base64.urlsafe_b64decode(encoded.encode()).decode("utf-8")
+            except (ValueError, UnicodeDecodeError):
+                pending_comment = ""
+            continue
         if not line or line.startswith("#"):
             continue
         value = line.removeprefix("dhcp-host=")
@@ -81,7 +90,9 @@ def read_reservations(path: Path) -> list[dict[str, str]]:
             if ip_index is not None and mac_index is not None:
                 hostname = next((part for i, part in enumerate(parts)
                                  if i not in (ip_index, mac_index) and NAME_RE.fullmatch(part)), "")
-                rows.append({"mac": parts[mac_index].lower(), "ip": parts[ip_index], "hostname": hostname})
+                rows.append({"mac": parts[mac_index].lower(), "ip": parts[ip_index], "hostname": hostname,
+                             "comment": pending_comment})
+                pending_comment = ""
     return rows
 
 
@@ -287,9 +298,16 @@ def render_reservations(rows: list[dict[str, object]]) -> str:
         if not MAC_RE.fullmatch(mac):
             raise ValueError(f"Invalid MAC address: {mac}")
         ip, hostname = valid_ip(row.get("ip", "")), valid_name(row.get("hostname", ""))
+        comment = row.get("comment", "")
+        if not isinstance(comment, str) or any(c in comment for c in "\r\n") or len(comment) > 500:
+            raise ValueError("Reservation comments must be text under 500 characters without newlines")
+        comment = comment.strip()
         if mac in seen_mac or ip in seen_ip:
             raise ValueError("MAC and IP addresses must be unique")
         seen_mac.add(mac); seen_ip.add(ip)
+        if comment:
+            encoded = base64.urlsafe_b64encode(comment.encode("utf-8")).decode()
+            lines.append(f"# dnsmasq-web-note: {encoded}")
         lines.append(f"{mac},{hostname},{ip}")
     return "\n".join(lines) + "\n"
 

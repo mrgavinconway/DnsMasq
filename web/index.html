@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/style.css?v=2">
   <link rel="stylesheet" href="/vendor.css?v=3">
   <link rel="stylesheet" href="/logs.css?v=1">
+  <link rel="stylesheet" href="/enhancements.css?v=1">
 </head>
 <body>
 <main>
@@ -42,7 +43,7 @@
   <section id="leases" class="panel active">
     <div class="panel-head"><div><h2>Devices on your network</h2><p>Live leases reported by dnsmasq.</p></div><button class="secondary" id="refresh">Refresh</button></div>
     <div class="toolbar"><label class="search"><span class="sr-only">Filter leases</span><input id="lease-filter" type="search" placeholder="Search device, IP or MAC…" autocomplete="off"></label></div>
-    <div class="table-wrap"><table><thead><tr><th>Device</th><th>IP address</th><th>MAC address</th><th>Vendor</th><th>Lease</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="lease-rows"><tr><td colspan="6" class="loading">Loading leases…</td></tr></tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th aria-sort="ascending"><button data-sort="hostname">Device <i></i></button></th><th><button data-sort="ip">IP address <i></i></button></th><th><button data-sort="mac">MAC address <i></i></button></th><th><button data-sort="vendor">Vendor <i></i></button></th><th><button data-sort="remaining">Lease <i></i></button></th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="lease-rows"><tr><td colspan="6" class="loading">Loading leases…</td></tr></tbody></table></div>
   </section>
 
   <section id="reservations" class="panel">
@@ -62,6 +63,7 @@
       <div class="update-copy"><strong>Software updates</strong><span id="update-message">Checking installed version…</span><small id="update-version"></small></div>
       <button class="secondary" id="update-check">Check</button><button class="primary" id="update-apply" disabled>Install update</button>
     </div>
+    <div class="log-search"><input id="log-filter" type="search" placeholder="Search logs…" autocomplete="off"><button class="secondary" id="log-search">Search</button><button class="secondary" id="log-search-clear" disabled>Clear search</button><span id="log-matches"></span></div>
     <div class="log-console" id="log-console" tabindex="0" aria-label="Live dnsmasq logs"><div class="log-empty" id="log-empty">Open this page to begin streaming logs.</div></div>
     <div class="log-footer"><span id="log-status"><i></i>Not connected</span><span>Showing the latest 1,000 lines</span></div>
   </section>
@@ -72,6 +74,6 @@
   <div class="footer-actions"><button id="discard" class="secondary" disabled>Discard</button><button id="save" class="primary" disabled>Apply changes</button></div>
 </footer>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="/app.js?v=5"></script>
+<script src="/app.js?v=6"></script>
 </body>
 </html>
