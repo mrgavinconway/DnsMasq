@@ -33,6 +33,8 @@ dhcp-hostsfile=/etc/homelan-reservations
 addn-hosts=/etc/homelan-hosts
 ```
 
+The DNS editor permits repeated hostnames because standard hosts files can intentionally map one name to multiple addresses.
+
 Saves use temporary sibling files under `/etc` so both configuration files can be replaced atomically. The systemd unit grants the service write access to `/etc` for this purpose; the application itself only targets the two configured files.
 
 ## Configuration

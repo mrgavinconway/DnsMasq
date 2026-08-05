@@ -21,6 +21,13 @@ class ConfigTests(unittest.TestCase):
     def test_dns(self):
         self.assertIn("10.0.0.3\tnas.home", app.render_dns([{"hostname": "nas.home", "ip": "10.0.0.3"}]))
 
+    def test_duplicate_dns_hostnames_are_valid(self):
+        text = app.render_dns([
+            {"hostname": "service.home", "ip": "10.0.0.3"},
+            {"hostname": "service.home", "ip": "10.0.0.4"},
+        ])
+        self.assertEqual(text.count("service.home"), 2)
+
     def test_read_dns(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "dns.conf"

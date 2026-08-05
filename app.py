@@ -313,13 +313,9 @@ def render_reservations(rows: list[dict[str, object]]) -> str:
 
 
 def render_dns(rows: list[dict[str, object]]) -> str:
-    seen = set()
     lines = ["# Managed by dnsmasq-web. Manual changes may be overwritten."]
     for row in rows:
         hostname, ip = valid_name(row.get("hostname", "")), valid_ip(row.get("ip", ""))
-        if hostname in seen:
-            raise ValueError("DNS hostnames must be unique")
-        seen.add(hostname)
         lines.append(f"{ip}\t{hostname}")
     return "\n".join(lines) + "\n"
 
