@@ -1,7 +1,7 @@
 [Unit]
 Description=Lightweight dnsmasq web interface
 After=network.target dnsmasq.service
-Requires=dnsmasq.service
+Wants=dnsmasq.service
 
 [Service]
 Type=simple

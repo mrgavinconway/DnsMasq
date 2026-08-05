@@ -49,6 +49,11 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             app.dnsmasq_action(None, "run-anything")
 
+    def test_web_service_survives_dnsmasq_restart(self):
+        unit = (Path(__file__).parents[1] / "dnsmasq-web.service").read_text()
+        self.assertIn("Wants=dnsmasq.service", unit)
+        self.assertNotIn("Requires=dnsmasq.service", unit)
+
     def test_read_dns(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "dns.conf"

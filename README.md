@@ -45,6 +45,7 @@ Saves use temporary sibling files under `/etc` so both configuration files can b
 All settings are optional environment variables: `DNSMASQ_WEB_HOST`, `DNSMASQ_WEB_PORT`, `DNSMASQ_WEB_RESERVATIONS`, `DNSMASQ_WEB_DNS`, `DNSMASQ_WEB_SETTINGS`, `DNSMASQ_WEB_LEASES`, `DNSMASQ_WEB_BINARY`, and `DNSMASQ_WEB_RESTART`.
 
 The System tab provides guarded cache clearing, cache-stat reporting, configuration validation, service restart, and a managed `/etc/dnsmasq.d/web-settings.conf` for cache size, local-name privacy, rebinding protection, and upstream DNS servers. Settings are reviewed, tested, and rolled back if dnsmasq rejects them.
+The Web UI uses a soft systemd dependency on dnsmasq so restarting the DNS service does not terminate an in-progress browser request.
 
 When run manually, the server defaults to `127.0.0.1:8080`. The installed systemd unit explicitly uses `0.0.0.0:80`.
 
