@@ -35,7 +35,8 @@ install -m 0644 "$SCRIPT_DIR/web/app.js" "$APP_DIR/web/app.js"
 install -m 0644 "$SCRIPT_DIR/dnsmasq-web.service" "$UNIT"
 
 systemctl daemon-reload
-systemctl enable --now dnsmasq-web.service
+systemctl enable dnsmasq-web.service
+systemctl restart dnsmasq-web.service
 
 if systemctl is-active --quiet dnsmasq-web.service; then
     address=$(hostname -I 2>/dev/null | awk '{print $1}')

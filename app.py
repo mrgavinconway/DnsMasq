@@ -269,12 +269,17 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt: str, *args: object) -> None:
         print(f"{self.address_string()} - {fmt % args}")
 
+    def end_headers(self) -> None:
+        # The UI is updated in place on the Pi; stale assets can otherwise call
+        # an older API after an upgrade.
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
     def reply(self, status: int, body: object) -> None:
         data = json.dumps(body).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
         self.end_headers(); self.wfile.write(data)
 
     def do_GET(self) -> None:
