@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#123e2a">
   <title>HomeLAN · dnsmasq</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/vendor.css">
 </head>
 <body>
 <main>
@@ -57,6 +58,13 @@
   <div><strong id="dirty">No unsaved changes</strong><span id="save-note">dnsmasq is up to date</span></div>
   <div class="footer-actions"><button id="discard" class="secondary" disabled>Discard</button><button id="save" class="primary" disabled>Apply changes</button></div>
 </footer>
+<dialog id="vendor-dialog" class="vendor-dialog">
+  <button class="dialog-close" aria-label="Close vendor details">×</button>
+  <p class="eyebrow">MAC ADDRESS</p>
+  <h2 id="vendor-name">Looking up vendor…</h2>
+  <p id="vendor-mac" class="vendor-mac"></p>
+  <p id="vendor-note" class="vendor-note">Matched against the local IEEE registration database.</p>
+</dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="/app.js"></script>
 </body>

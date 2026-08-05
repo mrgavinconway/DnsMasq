@@ -21,7 +21,7 @@ function filteredLeases(){const q=$('#lease-filter').value.trim().toLowerCase();
 
 function renderLeases(){
  const rows=filteredLeases();
- $('#lease-rows').innerHTML=rows.map(x=>{const reserved=isReserved(x),initial=(x.hostname||'?')[0];return`<tr><td><div class="device"><span class="device-icon">${esc(initial)}</span><strong>${esc(x.hostname||'Unknown device')}</strong></div></td><td class="mono">${esc(x.ip)}</td><td class="mono">${esc(x.mac)}</td><td><span class="lease-time">${duration(x.remaining)}</span></td><td>${reserved?'<span class="reserved">Reserved</span>':`<button class="reserve" data-mac="${esc(x.mac)}" data-ip="${esc(x.ip)}" data-host="${esc(x.hostname)}">Reserve</button>`}</td></tr>`}).join('')||'<tr><td colspan="5" class="loading">No matching leases.</td></tr>';
+ $('#lease-rows').innerHTML=rows.map(x=>{const reserved=isReserved(x),initial=(x.hostname||'?')[0];return`<tr><td><div class="device"><span class="device-icon">${esc(initial)}</span><strong>${esc(x.hostname||'Unknown device')}</strong></div></td><td class="mono">${esc(x.ip)}</td><td><button class="mac-lookup mono" data-lookup-mac="${esc(x.mac)}" title="Look up MAC vendor">${esc(x.mac)}</button></td><td><span class="lease-time">${duration(x.remaining)}</span></td><td>${reserved?'<span class="reserved">Reserved</span>':`<button class="reserve" data-mac="${esc(x.mac)}" data-ip="${esc(x.ip)}" data-host="${esc(x.hostname)}">Reserve</button>`}</td></tr>`}).join('')||'<tr><td colspan="5" class="loading">No matching leases.</td></tr>';
 }
 function render(){
  $('#lease-count').textContent=state.leases.length;$('#reservation-count').textContent=state.reservations.length;$('#dns-count').textContent=state.dns.length;
@@ -38,13 +38,21 @@ async function load(showNotice=false){
 }
 function showTab(name){document.querySelectorAll('nav button,.panel').forEach(x=>x.classList.remove('active'));document.querySelector(`[data-tab="${name}"]`).classList.add('active');$('#'+name).classList.add('active')}
 function addReservation(button){const mac=button.dataset.mac,ip=button.dataset.ip,hostname=button.dataset.host||'';state.reservations.push({hostname,ip,mac});render();showTab('reservations');const input=document.querySelector('#reservation-rows .record:last-child input');input?.focus();notify(`${hostname||ip} added as a reservation`)}
+async function showVendor(mac){
+ const dialog=$('#vendor-dialog');$('#vendor-name').textContent='Looking up vendor…';$('#vendor-mac').textContent=mac;$('#vendor-note').textContent='Matched against the local IEEE registration database.';dialog.showModal();
+ try{const r=await fetch(`/api/vendor?mac=${encodeURIComponent(mac)}`);const out=await r.json();if(!r.ok)throw Error(out.error||'Lookup failed');$('#vendor-name').textContent=out.vendor;$('#vendor-note').textContent=out.private?'This device uses a locally administered address, so its manufacturer is intentionally hidden.':'Matched against the local IEEE registration database.'}
+ catch(e){$('#vendor-name').textContent='Vendor unavailable';$('#vendor-note').textContent=e.message}
+}
 
 document.addEventListener('click',e=>{
  const tab=e.target.closest('[data-tab]');if(tab)showTab(tab.dataset.tab);
  const add=e.target.closest('[data-add]');if(add){state[add.dataset.add].push(add.dataset.add==='dns'?{hostname:'',ip:''}:{hostname:'',ip:'',mac:''});render();document.querySelector(`#${add.dataset.add==='dns'?'dns':'reservation'}-rows .record:last-child input`)?.focus()}
  const rm=e.target.closest('.remove');if(rm){const row=rm.closest('.record');state[row.dataset.kind].splice(+row.dataset.index,1);render()}
  const reserve=e.target.closest('.reserve');if(reserve)addReservation(reserve);
+ const lookup=e.target.closest('[data-lookup-mac]');if(lookup)showVendor(lookup.dataset.lookupMac);
+ if(e.target.closest('.dialog-close'))$('#vendor-dialog').close();
 });
+$('#vendor-dialog').addEventListener('click',e=>{if(e.target===$('#vendor-dialog'))$('#vendor-dialog').close()});
 document.addEventListener('input',e=>{const row=e.target.closest('.record');if(row){state[row.dataset.kind][+row.dataset.index][e.target.dataset.key]=e.target.value;e.target.classList.remove('invalid');setDirty()}if(e.target.id==='lease-filter')renderLeases()});
 $('#refresh').onclick=()=>{if(dirty){notify('Apply or discard changes before refreshing',true);return}load(true)};
 $('#discard').onclick=()=>load().then(()=>notify('Changes discarded'));

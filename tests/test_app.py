@@ -55,6 +55,25 @@ class ConfigTests(unittest.TestCase):
             path.write_text("12345.67 9876.54\n")
             self.assertEqual(app.read_number(path), 12345.7)
 
+    def test_private_mac_vendor(self):
+        result = app.mac_vendor("02:00:00:00:00:01")
+        self.assertTrue(result["private"])
+        self.assertIn("randomized", result["vendor"])
+
+    def test_invalid_mac_vendor(self):
+        with self.assertRaises(ValueError):
+            app.mac_vendor("not-a-mac")
+
+    def test_registered_mac_vendor(self):
+        original = app.OUI_CACHE
+        try:
+            app.OUI_CACHE = {"A8BBCC": "Example Devices Ltd"}
+            result = app.mac_vendor("a8:bb:cc:00:00:01")
+            self.assertEqual(result["vendor"], "Example Devices Ltd")
+            self.assertFalse(result["private"])
+        finally:
+            app.OUI_CACHE = original
+
 
 if __name__ == "__main__":
     unittest.main()

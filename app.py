@@ -18,12 +18,14 @@ from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parent
 MAC_RE = re.compile(r"^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$")
 NAME_RE = re.compile(r"^(?=.{1,253}$)(?!-)[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*(?<!-)$")
 LOCK = threading.Lock()
+OUI_LOCK = threading.Lock()
+OUI_CACHE: dict[str, str] | None = None
 
 
 @dataclass
@@ -170,6 +172,37 @@ def system_stats() -> dict[str, object]:
             "diskPercent": disk_percent, "uptime": uptime}
 
 
+def oui_database() -> dict[str, str]:
+    global OUI_CACHE
+    if OUI_CACHE is not None:
+        return OUI_CACHE
+    with OUI_LOCK:
+        if OUI_CACHE is not None:
+            return OUI_CACHE
+        database: dict[str, str] = {}
+        candidates = (Path("/usr/share/ieee-data/oui.txt"), Path("/var/lib/ieee-data/oui.txt"),
+                      Path("/usr/share/arp-scan/ieee-oui.txt"))
+        source = next((path for path in candidates if path.exists()), None)
+        if source:
+            for line in source.read_text(encoding="utf-8", errors="replace").splitlines():
+                match = re.match(r"^([0-9A-Fa-f]{2})[-:]?([0-9A-Fa-f]{2})[-:]?([0-9A-Fa-f]{2})\s+\(hex\)\s+(.+)$", line)
+                if match:
+                    database["".join(match.group(i).upper() for i in range(1, 4))] = match.group(4).strip()
+        OUI_CACHE = database
+        return database
+
+
+def mac_vendor(mac: str) -> dict[str, str | bool]:
+    if not MAC_RE.fullmatch(mac):
+        raise ValueError("Invalid MAC address")
+    normalized = mac.lower()
+    if int(normalized[:2], 16) & 2:
+        return {"mac": normalized, "vendor": "Private or randomized address", "private": True}
+    prefix = normalized.replace(":", "")[:6].upper()
+    vendor = oui_database().get(prefix)
+    return {"mac": normalized, "vendor": vendor or "Vendor not found", "private": False}
+
+
 def render_reservations(rows: list[dict[str, object]]) -> str:
     seen_mac, seen_ip = set(), set()
     lines = ["# Managed by dnsmasq-web. Manual changes may be overwritten."]
@@ -245,11 +278,19 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers(); self.wfile.write(data)
 
     def do_GET(self) -> None:
-        if urlparse(self.path).path == "/api/state":
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/state":
             self.reply(200, {"reservations": read_reservations(self.settings.reservations),
                              "dns": read_dns(self.settings.dns),
                              "leases": read_leases(self.settings.leases),
                              "system": system_stats()})
+            return
+        if parsed.path == "/api/vendor":
+            try:
+                mac = parse_qs(parsed.query).get("mac", [""])[0]
+                self.reply(200, mac_vendor(mac))
+            except ValueError as exc:
+                self.reply(400, {"error": str(exc)})
             return
         super().do_GET()
 

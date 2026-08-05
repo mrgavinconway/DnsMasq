@@ -13,6 +13,8 @@ sudo ./install.sh
 
 The installer places the application under `/opt/dnsmasq-web`, starts it immediately, and enables it at every boot. Open `http://<pi-address>/` in a browser. The service listens on port 80 on all interfaces and has no login.
 
+Click any MAC address in the leases table to identify its registered manufacturer. Lookups use Debian's local `ieee-data` database, installed automatically, so MAC addresses are never sent to an external service. Randomized/private MAC addresses are identified as such.
+
 Restrict port 80 to your trusted LAN. Every device that can reach the page can change dnsmasq settings. Never expose it directly to the internet; use a VPN if remote access is ever needed.
 
 The service manages `/etc/homelan-reservations` in dnsmasq `dhcp-hostsfile` format and `/etc/homelan-hosts` in standard hosts-file format. Configure dnsmasq to load them:
