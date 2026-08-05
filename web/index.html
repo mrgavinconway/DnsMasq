@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/vendor.css?v=3">
   <link rel="stylesheet" href="/logs.css?v=1">
   <link rel="stylesheet" href="/enhancements.css?v=1">
+  <link rel="stylesheet" href="/log-filter.css?v=1">
 </head>
 <body>
 <main>
@@ -63,7 +64,7 @@
       <div class="update-copy"><strong>Software updates</strong><span id="update-message">Checking installed version…</span><small id="update-version"></small></div>
       <button class="secondary" id="update-check">Check</button><button class="primary" id="update-apply" disabled>Install update</button>
     </div>
-    <div class="log-search"><input id="log-filter" type="search" placeholder="Search logs…" autocomplete="off"><button class="secondary" id="log-search">Search</button><button class="secondary" id="log-search-clear" disabled>Clear search</button><span id="log-matches"></span></div>
+    <div class="log-search"><label><span class="sr-only">Log source</span><select id="log-source"><option value="all">All services</option><option value="dnsmasq">dnsmasq</option><option value="web">Web interface</option></select></label><input id="log-filter" type="search" placeholder="Search logs…" autocomplete="off"><button class="secondary" id="log-search">Search</button><button class="secondary" id="log-search-clear" disabled>Clear search</button><span id="log-matches"></span></div>
     <div class="log-console" id="log-console" tabindex="0" aria-label="Live dnsmasq logs"><div class="log-empty" id="log-empty">Open this page to begin streaming logs.</div></div>
     <div class="log-footer"><span id="log-status"><i></i>Not connected</span><span>Showing the latest 1,000 lines</span></div>
   </section>
@@ -74,6 +75,6 @@
   <div class="footer-actions"><button id="discard" class="secondary" disabled>Discard</button><button id="save" class="primary" disabled>Apply changes</button></div>
 </footer>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="/app.js?v=6"></script>
+<script src="/app.js?v=7"></script>
 </body>
 </html>

@@ -1,0 +1,1 @@
+.log-search label{flex:0 0 auto}.log-search select{min-width:150px;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:10px 34px 10px 12px;color:var(--ink);cursor:pointer}.log-search select:focus{outline:3px solid rgba(20,92,58,.17);border-color:#75a58a}

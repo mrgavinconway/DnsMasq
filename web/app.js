@@ -1,5 +1,5 @@
 let state={reservations:[],dns:[],leases:[]};
-let baseline='',dirty=false,toastTimer,logSource=null,logPaused=false,updatePoll=null,logLines=[],logQuery='';
+let baseline='',dirty=false,toastTimer,logSource=null,logPaused=false,updatePoll=null,logLines=[],logQuery='',logService='all';
 let leaseSort={key:'hostname',direction:1};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -42,8 +42,9 @@ function showTab(name){document.querySelectorAll('nav button,.panel').forEach(x=
 function addReservation(button){const mac=button.dataset.mac,ip=button.dataset.ip,hostname=button.dataset.host||'';state.reservations.push({hostname,ip,mac,comment:''});render();showTab('reservations');const input=document.querySelector('#reservation-rows .record:last-child input');input?.focus();notify(`${hostname||ip} added as a reservation`)}
 function logStatus(message,state=''){$('#log-status').className=state;$('#log-status').innerHTML=`<i></i>${esc(message)}`;$('#log-live').textContent=state==='connected'?'Live':state==='disconnected'?'Retrying':'Paused'}
 function logRow(line){const row=document.createElement('div');row.className=`log-line${/error|failed|failure|fatal/i.test(line)?' error':/warn|denied|timeout/i.test(line)?' warning':''}`;row.textContent=line;return row}
-function renderLogs(){const consoleEl=$('#log-console'),matches=logQuery?logLines.filter(line=>line.toLowerCase().includes(logQuery)):logLines;consoleEl.replaceChildren(...matches.map(logRow));if(!matches.length){const empty=document.createElement('div');empty.className='log-empty';empty.id='log-empty';empty.textContent=logQuery?'No matching log entries.':'Waiting for new log entries…';consoleEl.appendChild(empty)}$('#log-matches').textContent=logQuery?`${matches.length} matching ${logLines.length} lines`:'';consoleEl.scrollTop=consoleEl.scrollHeight}
-function appendLog(line){const consoleEl=$('#log-console'),follow=consoleEl.scrollHeight-consoleEl.scrollTop-consoleEl.clientHeight<80;logLines.push(line);if(logLines.length>1000)logLines.shift();if(!logQuery||line.toLowerCase().includes(logQuery)){$('#log-empty')?.remove();consoleEl.appendChild(logRow(line));while(consoleEl.children.length>1000)consoleEl.firstElementChild.remove();if(follow)consoleEl.scrollTop=consoleEl.scrollHeight}if(logQuery)$('#log-matches').textContent=`${logLines.filter(item=>item.toLowerCase().includes(logQuery)).length} matching ${logLines.length} lines`}
+function matchesLog(line){const source=logService==='all'||(logService==='dnsmasq'&&line.includes('dnsmasq.service'))||(logService==='web'&&(line.includes('dnsmasq-web.service')||line.includes('dnsmasq-web-update')));return source&&(!logQuery||line.toLowerCase().includes(logQuery))}
+function renderLogs(){const consoleEl=$('#log-console'),matches=logLines.filter(matchesLog);consoleEl.replaceChildren(...matches.map(logRow));if(!matches.length){const empty=document.createElement('div');empty.className='log-empty';empty.id='log-empty';empty.textContent=logLines.length?'No matching log entries.':'Waiting for new log entries…';consoleEl.appendChild(empty)}const filtered=logQuery||logService!=='all';$('#log-matches').textContent=filtered?`${matches.length} matching ${logLines.length} lines`:'';consoleEl.scrollTop=consoleEl.scrollHeight}
+function appendLog(line){const consoleEl=$('#log-console'),follow=consoleEl.scrollHeight-consoleEl.scrollTop-consoleEl.clientHeight<80;logLines.push(line);if(logLines.length>1000)logLines.shift();if(matchesLog(line)){$('#log-empty')?.remove();consoleEl.appendChild(logRow(line));while(consoleEl.children.length>1000)consoleEl.firstElementChild.remove();if(follow)consoleEl.scrollTop=consoleEl.scrollHeight}if(logQuery||logService!=='all')$('#log-matches').textContent=`${logLines.filter(matchesLog).length} matching ${logLines.length} lines`}
 function startLogs(){if(logSource)return;logPaused=false;$('#log-pause').textContent='Pause';logStatus('Connecting…');logSource=new EventSource('/api/logs');logSource.onopen=()=>logStatus('Streaming live','connected');logSource.onmessage=e=>appendLog(JSON.parse(e.data));logSource.onerror=()=>logStatus('Connection lost — retrying','disconnected')}
 function stopLogs(){if(logSource){logSource.close();logSource=null}logPaused=true;$('#log-pause').textContent='Resume';logStatus('Paused')}
 function shortVersion(value){return value&&value!=='development'?value.slice(0,7):value||'unknown'}
@@ -69,6 +70,7 @@ $('#log-clear').onclick=()=>{logLines=[];renderLogs()};
 $('#log-search').onclick=()=>{logQuery=$('#log-filter').value.trim().toLowerCase();$('#log-search-clear').disabled=!logQuery;renderLogs()};
 $('#log-search-clear').onclick=()=>{$('#log-filter').value='';logQuery='';$('#log-search-clear').disabled=true;renderLogs()};
 $('#log-filter').addEventListener('keydown',e=>{if(e.key==='Enter')$('#log-search').click()});
+$('#log-source').onchange=e=>{logService=e.target.value;renderLogs()};
 $('#update-check').onclick=()=>checkUpdate();
 $('#update-apply').onclick=applyUpdate;
 $('#discard').onclick=()=>load().then(()=>notify('Changes discarded'));
