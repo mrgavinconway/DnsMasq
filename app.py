@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
 MAC_RE = re.compile(r"^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$")
@@ -203,6 +203,13 @@ def mac_vendor(mac: str) -> dict[str, str | bool]:
     return {"mac": normalized, "vendor": vendor or "Vendor not found", "private": False}
 
 
+def leases_with_vendors(path: Path) -> list[dict[str, object]]:
+    leases = read_leases(path)
+    for lease in leases:
+        lease["vendor"] = mac_vendor(str(lease["mac"]))["vendor"]
+    return leases
+
+
 def render_reservations(rows: list[dict[str, object]]) -> str:
     seen_mac, seen_ip = set(), set()
     lines = ["# Managed by dnsmasq-web. Manual changes may be overwritten."]
@@ -287,15 +294,8 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/state":
             self.reply(200, {"reservations": read_reservations(self.settings.reservations),
                              "dns": read_dns(self.settings.dns),
-                             "leases": read_leases(self.settings.leases),
+                             "leases": leases_with_vendors(self.settings.leases),
                              "system": system_stats()})
-            return
-        if parsed.path == "/api/vendor":
-            try:
-                mac = parse_qs(parsed.query).get("mac", [""])[0]
-                self.reply(200, mac_vendor(mac))
-            except ValueError as exc:
-                self.reply(400, {"error": str(exc)})
             return
         super().do_GET()
 

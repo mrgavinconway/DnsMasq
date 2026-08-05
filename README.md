@@ -15,7 +15,7 @@ The installer places the application under `/opt/dnsmasq-web`, starts it immedia
 
 Running the installer again upgrades the existing installation and restarts the service so backend and browser assets remain in sync.
 
-Click any MAC address in the leases table to identify its registered manufacturer. Lookups use Debian's local `ieee-data` database, installed automatically, so MAC addresses are never sent to an external service. Randomized/private MAC addresses are identified as such.
+The leases table shows each MAC address's registered manufacturer and vendor names are searchable alongside devices, IPs, and MACs. Lookups use Debian's local `ieee-data` database, installed automatically, so MAC addresses are never sent to an external service. Randomized/private MAC addresses are identified as such.
 
 Restrict port 80 to your trusted LAN. Every device that can reach the page can change dnsmasq settings. Never expose it directly to the internet; use a VPN if remote access is ever needed.
 

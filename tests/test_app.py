@@ -74,6 +74,17 @@ class ConfigTests(unittest.TestCase):
         finally:
             app.OUI_CACHE = original
 
+    def test_leases_include_vendor(self):
+        original = app.OUI_CACHE
+        try:
+            app.OUI_CACHE = {"A8BBCC": "Example Devices Ltd"}
+            with tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "leases"
+                path.write_text("4102444800 a8:bb:cc:00:00:01 10.0.0.7 laptop 01:aa\n")
+                self.assertEqual(app.leases_with_vendors(path)[0]["vendor"], "Example Devices Ltd")
+        finally:
+            app.OUI_CACHE = original
+
 
 if __name__ == "__main__":
     unittest.main()
