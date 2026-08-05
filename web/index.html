@@ -7,6 +7,7 @@
   <title>HomeLAN · dnsmasq</title>
   <link rel="stylesheet" href="/style.css?v=2">
   <link rel="stylesheet" href="/vendor.css?v=3">
+  <link rel="stylesheet" href="/logs.css?v=1">
 </head>
 <body>
 <main>
@@ -35,6 +36,7 @@
     <button class="active" data-tab="leases">Leases</button>
     <button data-tab="reservations">Reservations</button>
     <button data-tab="dns">DNS records</button>
+    <button data-tab="logs">Logs <span id="log-live" class="nav-live">Live</span></button>
   </nav>
 
   <section id="leases" class="panel active">
@@ -52,6 +54,17 @@
     <div class="panel-head"><div><h2>Local DNS records</h2><p>Friendly names resolved inside your home network.</p></div><button class="primary" data-add="dns">Add record</button></div>
     <div id="dns-rows" class="cards"></div>
   </section>
+
+  <section id="logs" class="panel">
+    <div class="panel-head"><div><h2>Live service logs</h2><p>dnsmasq and web interface activity from the system journal.</p></div><div class="log-actions"><button class="secondary" id="log-clear">Clear</button><button class="secondary" id="log-pause">Pause</button></div></div>
+    <div class="update-card">
+      <div class="update-icon" aria-hidden="true">↻</div>
+      <div class="update-copy"><strong>Software updates</strong><span id="update-message">Checking installed version…</span><small id="update-version"></small></div>
+      <button class="secondary" id="update-check">Check</button><button class="primary" id="update-apply" disabled>Install update</button>
+    </div>
+    <div class="log-console" id="log-console" tabindex="0" aria-label="Live dnsmasq logs"><div class="log-empty" id="log-empty">Open this page to begin streaming logs.</div></div>
+    <div class="log-footer"><span id="log-status"><i></i>Not connected</span><span>Showing the latest 1,000 lines</span></div>
+  </section>
 </main>
 
 <footer id="savebar" class="savebar">
@@ -59,6 +72,6 @@
   <div class="footer-actions"><button id="discard" class="secondary" disabled>Discard</button><button id="save" class="primary" disabled>Apply changes</button></div>
 </footer>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="/app.js?v=3"></script>
+<script src="/app.js?v=5"></script>
 </body>
 </html>

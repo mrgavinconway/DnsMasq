@@ -85,6 +85,16 @@ class ConfigTests(unittest.TestCase):
         finally:
             app.OUI_CACHE = original
 
+    def test_journal_reconnect_uses_cursor(self):
+        command = app.journal_command("cursor-123")
+        self.assertIn("--after-cursor=cursor-123", command)
+        self.assertNotIn("--lines=150", command)
+
+    def test_format_journal_entry(self):
+        line = app.format_journal_entry({"__REALTIME_TIMESTAMP": "0", "_SYSTEMD_UNIT": "dnsmasq.service", "MESSAGE": "started"})
+        self.assertIn("dnsmasq.service", line)
+        self.assertTrue(line.endswith("started"))
+
 
 if __name__ == "__main__":
     unittest.main()

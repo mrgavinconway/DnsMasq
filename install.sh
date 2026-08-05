@@ -19,6 +19,11 @@ if ! command -v dnsmasq >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! command -v git >/dev/null 2>&1; then
+    echo "Installing git for in-app updates..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y git
+fi
+
 if ! dpkg-query -W -f='${Status}' ieee-data 2>/dev/null | grep -q "install ok installed"; then
     echo "Installing the local IEEE MAC vendor database..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y ieee-data
@@ -28,11 +33,18 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 install -d -m 0755 "$APP_DIR" "$APP_DIR/web"
 install -m 0755 "$SCRIPT_DIR/app.py" "$APP_DIR/app.py"
+install -m 0755 "$SCRIPT_DIR/update.sh" "$APP_DIR/update.sh"
 install -m 0644 "$SCRIPT_DIR/web/index.html" "$APP_DIR/web/index.html"
 install -m 0644 "$SCRIPT_DIR/web/style.css" "$APP_DIR/web/style.css"
 install -m 0644 "$SCRIPT_DIR/web/vendor.css" "$APP_DIR/web/vendor.css"
+install -m 0644 "$SCRIPT_DIR/web/logs.css" "$APP_DIR/web/logs.css"
 install -m 0644 "$SCRIPT_DIR/web/app.js" "$APP_DIR/web/app.js"
 install -m 0644 "$SCRIPT_DIR/dnsmasq-web.service" "$UNIT"
+if git -C "$SCRIPT_DIR" rev-parse HEAD >/dev/null 2>&1; then
+    git -C "$SCRIPT_DIR" rev-parse HEAD > "$APP_DIR/VERSION"
+else
+    printf "development\n" > "$APP_DIR/VERSION"
+fi
 
 systemctl daemon-reload
 systemctl enable dnsmasq-web.service

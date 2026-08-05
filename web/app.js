@@ -1,5 +1,5 @@
 let state={reservations:[],dns:[],leases:[]};
-let baseline='',dirty=false,toastTimer;
+let baseline='',dirty=false,toastTimer,logSource=null,logPaused=false,updatePoll=null;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const config=()=>({reservations:state.reservations,dns:state.dns});
@@ -36,8 +36,20 @@ async function load(showNotice=false){
  try{const r=await fetch('/api/state',{cache:'no-store'});if(!r.ok)throw Error('Could not reach the service');state=await r.json();baseline=snapshot();render();$('#status').innerHTML='<span></span>dnsmasq online';$('#status').className='status ok';$('#updated').textContent=`Updated ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;if(showNotice)notify('Network data refreshed')}
  catch(e){$('#status').innerHTML=`<span></span>${esc(e.message)}`;$('#status').className='status bad';notify(e.message,true)}finally{refresh.disabled=false}
 }
-function showTab(name){document.querySelectorAll('nav button,.panel').forEach(x=>x.classList.remove('active'));document.querySelector(`[data-tab="${name}"]`).classList.add('active');$('#'+name).classList.add('active')}
+function showTab(name){document.querySelectorAll('nav button,.panel').forEach(x=>x.classList.remove('active'));document.querySelector(`[data-tab="${name}"]`).classList.add('active');$('#'+name).classList.add('active');if(name==='logs'){if(!logPaused)startLogs();checkUpdate()}}
 function addReservation(button){const mac=button.dataset.mac,ip=button.dataset.ip,hostname=button.dataset.host||'';state.reservations.push({hostname,ip,mac});render();showTab('reservations');const input=document.querySelector('#reservation-rows .record:last-child input');input?.focus();notify(`${hostname||ip} added as a reservation`)}
+function logStatus(message,state=''){$('#log-status').className=state;$('#log-status').innerHTML=`<i></i>${esc(message)}`;$('#log-live').textContent=state==='connected'?'Live':state==='disconnected'?'Retrying':'Paused'}
+function appendLog(line){const consoleEl=$('#log-console'),follow=consoleEl.scrollHeight-consoleEl.scrollTop-consoleEl.clientHeight<80;$('#log-empty')?.remove();const row=document.createElement('div');row.className=`log-line${/error|failed|failure|fatal/i.test(line)?' error':/warn|denied|timeout/i.test(line)?' warning':''}`;row.textContent=line;consoleEl.appendChild(row);while(consoleEl.children.length>1000)consoleEl.firstElementChild.remove();if(follow)consoleEl.scrollTop=consoleEl.scrollHeight}
+function startLogs(){if(logSource)return;logPaused=false;$('#log-pause').textContent='Pause';logStatus('Connecting…');logSource=new EventSource('/api/logs');logSource.onopen=()=>logStatus('Streaming live','connected');logSource.onmessage=e=>appendLog(JSON.parse(e.data));logSource.onerror=()=>logStatus('Connection lost — retrying','disconnected')}
+function stopLogs(){if(logSource){logSource.close();logSource=null}logPaused=true;$('#log-pause').textContent='Resume';logStatus('Paused')}
+function shortVersion(value){return value&&value!=='development'?value.slice(0,7):value||'unknown'}
+async function checkUpdate(quiet=false){
+ const card=$('.update-card'),button=$('#update-apply');$('#update-check').disabled=true;
+ try{const r=await fetch('/api/update',{cache:'no-store'});const info=await r.json();if(!r.ok)throw Error(info.error||'Update check failed');const job=info.job||{};card.className=`update-card${job.state==='updating'?' updating':job.state==='failed'?' error':job.state==='complete'?' success':''}`;$('#update-version').textContent=`Installed ${shortVersion(info.current)}${info.latest?` · Latest ${shortVersion(info.latest)}`:''}`;
+   if(job.state==='updating'){$('#update-message').textContent=job.message;button.disabled=true;clearTimeout(updatePoll);updatePoll=setTimeout(()=>checkUpdate(true),2000)}else{$('#update-message').textContent=job.state==='failed'?job.message:info.error?'Could not reach GitHub':info.updateAvailable?'A newer version is ready to install':'You are up to date';button.disabled=!info.updateAvailable;if(job.state==='complete'&&!quiet)notify(job.message)}
+ }catch(e){card.className='update-card error';$('#update-message').textContent=e.message;button.disabled=true;if(quiet){clearTimeout(updatePoll);updatePoll=setTimeout(()=>checkUpdate(true),2500)}}finally{$('#update-check').disabled=false}
+}
+async function applyUpdate(){if(dirty){notify('Apply or discard configuration changes first',true);return}if(!confirm('Install the latest version and restart the web interface?'))return;$('#update-apply').disabled=true;$('.update-card').className='update-card updating';$('#update-message').textContent='Starting update…';try{const r=await fetch('/api/update',{method:'POST'});const out=await r.json();if(!r.ok)throw Error(out.error||'Could not start update');clearTimeout(updatePoll);updatePoll=setTimeout(()=>checkUpdate(true),1500)}catch(e){notify(e.message,true);checkUpdate(true)}}
 
 document.addEventListener('click',e=>{
  const tab=e.target.closest('[data-tab]');if(tab)showTab(tab.dataset.tab);
@@ -47,6 +59,10 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('input',e=>{const row=e.target.closest('.record');if(row){state[row.dataset.kind][+row.dataset.index][e.target.dataset.key]=e.target.value;e.target.classList.remove('invalid');setDirty()}if(e.target.id==='lease-filter')renderLeases()});
 $('#refresh').onclick=()=>{if(dirty){notify('Apply or discard changes before refreshing',true);return}load(true)};
+$('#log-pause').onclick=()=>logPaused?startLogs():stopLogs();
+$('#log-clear').onclick=()=>{$('#log-console').innerHTML='<div class="log-empty" id="log-empty">Waiting for new log entries…</div>'};
+$('#update-check').onclick=()=>checkUpdate();
+$('#update-apply').onclick=applyUpdate;
 $('#discard').onclick=()=>load().then(()=>notify('Changes discarded'));
 $('#save').onclick=async()=>{
  const invalid=[...document.querySelectorAll('.record input')].filter(x=>!x.value.trim());invalid.forEach(x=>x.classList.add('invalid'));if(invalid.length){invalid[0].focus();notify('Complete all fields before applying',true);return}
@@ -55,4 +71,5 @@ $('#save').onclick=async()=>{
  catch(e){notify(e.message,true);$('#save-note').textContent=e.message;button.disabled=false}finally{button.textContent='Apply changes'}
 };
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+window.addEventListener('pagehide',()=>logSource?.close());
 load();setInterval(()=>{if(!dirty)load()},30000);

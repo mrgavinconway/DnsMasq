@@ -17,6 +17,10 @@ Running the installer again upgrades the existing installation and restarts the 
 
 The leases table shows each MAC address's registered manufacturer and vendor names are searchable alongside devices, IPs, and MACs. Lookups use Debian's local `ieee-data` database, installed automatically, so MAC addresses are never sent to an external service. Randomized/private MAC addresses are identified as such.
 
+The Logs tab streams recent and live journal entries from `dnsmasq.service` and `dnsmasq-web.service`. It keeps at most 1,000 lines in the browser and supports pausing and clearing the view without changing the system journal.
+
+The Updates panel checks the GitHub `main` branch and can install it directly. Updates run as a separate transient systemd job, allowing the web service to restart safely during its own upgrade.
+
 Restrict port 80 to your trusted LAN. Every device that can reach the page can change dnsmasq settings. Never expose it directly to the internet; use a VPN if remote access is ever needed.
 
 The service manages `/etc/homelan-reservations` in dnsmasq `dhcp-hostsfile` format and `/etc/homelan-hosts` in standard hosts-file format. Configure dnsmasq to load them:

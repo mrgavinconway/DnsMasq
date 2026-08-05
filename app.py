@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from datetime import datetime
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -26,6 +27,9 @@ NAME_RE = re.compile(r"^(?=.{1,253}$)(?!-)[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*(?<
 LOCK = threading.Lock()
 OUI_LOCK = threading.Lock()
 OUI_CACHE: dict[str, str] | None = None
+UPDATE_LOCK = threading.Lock()
+UPDATE_STATUS = Path("/run/dnsmasq-web-update.json")
+REPOSITORY = os.getenv("DNSMASQ_WEB_REPOSITORY", "https://github.com/mrgavinconway/DnsMasq.git")
 
 
 @dataclass
@@ -210,6 +214,71 @@ def leases_with_vendors(path: Path) -> list[dict[str, object]]:
     return leases
 
 
+def journal_command(cursor: str = "") -> list[str]:
+    journalctl = shutil.which("journalctl") or "/usr/bin/journalctl"
+    command = [journalctl, "--unit=dnsmasq.service", "--unit=dnsmasq-web.service",
+               "--unit=dnsmasq-web-update*.service",
+               "--follow", "--output=json", "--no-pager"]
+    command.append(f"--after-cursor={cursor}" if cursor else "--lines=150")
+    return command
+
+
+def format_journal_entry(record: dict[str, object]) -> str:
+    raw_time = str(record.get("__REALTIME_TIMESTAMP", "0"))
+    try:
+        timestamp = datetime.fromtimestamp(int(raw_time) / 1_000_000).strftime("%Y-%m-%d %H:%M:%S")
+    except (ValueError, OSError, OverflowError):
+        timestamp = "---- -- --:--:--"
+    unit = str(record.get("_SYSTEMD_UNIT") or record.get("SYSLOG_IDENTIFIER") or "system")
+    message = str(record.get("MESSAGE", ""))
+    return f"{timestamp}  {unit:<22} {message}"
+
+
+def read_update_status() -> dict[str, object]:
+    try:
+        return json.loads(UPDATE_STATUS.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"state": "idle", "message": "No update has been run yet"}
+
+
+def update_info(check_remote: bool = True) -> dict[str, object]:
+    try:
+        current = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        current = "development"
+    status = read_update_status()
+    if status.get("state") == "updating":
+        check_remote = False
+    latest = None
+    error = None
+    if check_remote:
+        try:
+            result = subprocess.run([shutil.which("git") or "/usr/bin/git", "ls-remote", REPOSITORY,
+                                     "refs/heads/main"], capture_output=True, text=True, timeout=12)
+            if result.returncode:
+                raise RuntimeError((result.stderr or "GitHub check failed").strip())
+            latest = result.stdout.split()[0]
+        except (OSError, subprocess.TimeoutExpired, RuntimeError, IndexError) as exc:
+            error = str(exc)
+    return {"current": current, "latest": latest, "updateAvailable": bool(latest and not latest.startswith(current)),
+            "error": error, "job": status}
+
+
+def start_update() -> str:
+    with UPDATE_LOCK:
+        status = read_update_status()
+        if status.get("state") == "updating":
+            raise ValueError("An update is already running")
+        UPDATE_STATUS.write_text(json.dumps({"state": "updating", "message": "Starting update…"}), encoding="utf-8")
+        unit = f"dnsmasq-web-update-{int(time.time())}"
+        result = subprocess.run([shutil.which("systemd-run") or "/usr/bin/systemd-run", f"--unit={unit}",
+                                 "--collect", "/opt/dnsmasq-web/update.sh"], capture_output=True, text=True, timeout=10)
+        if result.returncode:
+            UPDATE_STATUS.write_text(json.dumps({"state": "failed", "message": result.stderr.strip()}), encoding="utf-8")
+            raise RuntimeError(result.stderr.strip() or "Could not start update")
+        return unit
+
+
 def render_reservations(rows: list[dict[str, object]]) -> str:
     seen_mac, seen_ip = set(), set()
     lines = ["# Managed by dnsmasq-web. Manual changes may be overwritten."]
@@ -269,6 +338,7 @@ def atomic_apply(settings: Settings, reservations: str, dns: str) -> None:
 
 class Handler(SimpleHTTPRequestHandler):
     settings: Settings
+    protocol_version = "HTTP/1.1"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT / "web"), **kwargs)
@@ -289,8 +359,45 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers(); self.wfile.write(data)
 
+    def stream_logs(self) -> None:
+        cursor = self.headers.get("Last-Event-ID", "")
+        command = journal_command(cursor)
+        process = None
+        try:
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                       text=True, encoding="utf-8", errors="replace", bufsize=1)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+            self.wfile.write(b": connected\n\n"); self.wfile.flush()
+            assert process.stdout is not None
+            for line in process.stdout:
+                try:
+                    record = json.loads(line)
+                    event_id = str(record.get("__CURSOR", "")).replace("\n", "")
+                    payload = f"id: {event_id}\ndata: {json.dumps(format_journal_entry(record))}\n\n".encode("utf-8")
+                except json.JSONDecodeError:
+                    payload = f"data: {json.dumps(line.rstrip())}\n\n".encode("utf-8")
+                self.wfile.write(payload); self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except OSError as exc:
+            if process is None:
+                self.reply(500, {"error": str(exc)})
+        finally:
+            if process is not None and process.poll() is None:
+                process.terminate()
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/logs":
+            self.stream_logs()
+            return
+        if parsed.path == "/api/update":
+            self.reply(200, update_info())
+            return
         if parsed.path == "/api/state":
             self.reply(200, {"reservations": read_reservations(self.settings.reservations),
                              "dns": read_dns(self.settings.dns),
@@ -298,6 +405,16 @@ class Handler(SimpleHTTPRequestHandler):
                              "system": system_stats()})
             return
         super().do_GET()
+
+    def do_POST(self) -> None:
+        if urlparse(self.path).path != "/api/update":
+            self.reply(404, {"error": "Not found"}); return
+        try:
+            self.reply(202, {"ok": True, "unit": start_update()})
+        except ValueError as exc:
+            self.reply(409, {"error": str(exc)})
+        except Exception as exc:
+            self.reply(500, {"error": str(exc)})
 
     def do_PUT(self) -> None:
         if urlparse(self.path).path != "/api/config":
@@ -328,6 +445,7 @@ def main() -> None:
                         os.getenv("DNSMASQ_WEB_RESTART", "systemctl reload-or-restart dnsmasq").split())
     Handler.settings = settings
     server = ThreadingHTTPServer((args.host, args.port), Handler)
+    server.daemon_threads = True
     print(f"dnsmasq-web listening on http://{args.host}:{args.port}")
     server.serve_forever()
 
