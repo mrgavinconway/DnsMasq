@@ -21,6 +21,8 @@ The Logs tab streams recent and live journal entries from `dnsmasq.service` and 
 
 Lease columns can be sorted in either direction by selecting their headings. DHCP reservations support optional comments, stored as encoded metadata comments beside the corresponding dnsmasq entry so the reservation file remains valid.
 
+Applying configuration opens a review that lists every addition, removal, and reservation modification. The review can be cancelled without losing the edits; dnsmasq is untouched until the change is explicitly confirmed.
+
 The Updates panel checks the GitHub `main` branch and can install it directly. Updates run as a separate transient systemd job, allowing the web service to restart safely during its own upgrade.
 Update progress is stored in the service's systemd-managed runtime directory and preserved while the web interface restarts.
 

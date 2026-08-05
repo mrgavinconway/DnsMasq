@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/logs.css?v=1">
   <link rel="stylesheet" href="/enhancements.css?v=1">
   <link rel="stylesheet" href="/log-filter.css?v=1">
+  <link rel="stylesheet" href="/review.css?v=1">
 </head>
 <body>
 <main>
@@ -74,7 +75,13 @@
   <div><strong id="dirty">No unsaved changes</strong><span id="save-note">dnsmasq is up to date</span></div>
   <div class="footer-actions"><button id="discard" class="secondary" disabled>Discard</button><button id="save" class="primary" disabled>Apply changes</button></div>
 </footer>
+<dialog id="review-dialog" class="review-dialog">
+  <div class="review-head"><div><p class="eyebrow">REVIEW CHANGES</p><h2>Apply to dnsmasq?</h2></div><button class="review-close" id="review-close" aria-label="Cancel and close">×</button></div>
+  <p class="review-intro">These changes will be validated, written to your HomeLAN files, and followed by a dnsmasq reload.</p>
+  <div id="review-list" class="review-list"></div>
+  <div class="review-actions"><button class="secondary" id="review-cancel">Cancel</button><button class="primary" id="review-confirm">Confirm and apply</button></div>
+</dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="/app.js?v=7"></script>
+<script src="/app.js?v=8"></script>
 </body>
 </html>

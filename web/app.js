@@ -56,6 +56,24 @@ async function checkUpdate(quiet=false){
 }
 async function applyUpdate(){if(dirty){notify('Apply or discard configuration changes first',true);return}if(!confirm('Install the latest version and restart the web interface?'))return;$('#update-apply').disabled=true;$('.update-card').className='update-card updating';$('#update-message').textContent='Starting update…';try{const r=await fetch('/api/update',{method:'POST'});const out=await r.json();if(!r.ok)throw Error(out.error||'Could not start update');clearTimeout(updatePoll);updatePoll=setTimeout(()=>checkUpdate(true),1500)}catch(e){notify(e.message,true);checkUpdate(true)}}
 
+function describeReservation(row){return`${row.hostname||'Unnamed'} · ${row.ip} · ${row.mac}`}
+function buildChanges(){
+ const before=JSON.parse(baseline||'{"reservations":[],"dns":[]}'),changes=[],oldReservations=new Map(before.reservations.map(row=>[row.mac.toLowerCase(),row])),newReservations=new Map(state.reservations.map(row=>[row.mac.toLowerCase(),row]));
+ for(const [mac,oldRow] of oldReservations){const newRow=newReservations.get(mac);if(!newRow){changes.push({type:'remove',title:`Remove reservation: ${oldRow.hostname}`,detail:describeReservation(oldRow)});continue}const fields=[];if(oldRow.hostname!==newRow.hostname)fields.push(`hostname ${oldRow.hostname} → ${newRow.hostname}`);if(oldRow.ip!==newRow.ip)fields.push(`IP ${oldRow.ip} → ${newRow.ip}`);if((oldRow.comment||'')!==(newRow.comment||''))fields.push('comment updated');if(fields.length)changes.push({type:'change',title:`Modify reservation: ${newRow.hostname}`,detail:fields.join(' · ')})}
+ for(const [mac,row] of newReservations)if(!oldReservations.has(mac))changes.push({type:'add',title:`Add reservation: ${row.hostname}`,detail:describeReservation(row)});
+ const key=row=>`${row.hostname}\u0000${row.ip}`,oldDns=new Map(),newDns=new Map();for(const row of before.dns){const k=key(row),item=oldDns.get(k)||{row,count:0};item.count++;oldDns.set(k,item)}for(const row of state.dns){const k=key(row),item=newDns.get(k)||{row,count:0};item.count++;newDns.set(k,item)}
+ for(const [k,item] of oldDns){const removed=item.count-(newDns.get(k)?.count||0);for(let i=0;i<removed;i++)changes.push({type:'remove',title:`Remove DNS record: ${item.row.hostname}`,detail:item.row.ip})}for(const [k,item] of newDns){const added=item.count-(oldDns.get(k)?.count||0);for(let i=0;i<added;i++)changes.push({type:'add',title:`Add DNS record: ${item.row.hostname}`,detail:item.row.ip})}return changes
+}
+function openReview(){
+ const invalid=[...document.querySelectorAll('.record input:not([data-optional])')].filter(x=>!x.value.trim());invalid.forEach(x=>x.classList.add('invalid'));if(invalid.length){invalid[0].focus();notify('Complete all required fields before applying',true);return}
+ const list=$('#review-list'),symbols={add:'+',remove:'−',change:'~'};list.replaceChildren(...buildChanges().map(change=>{const item=document.createElement('div');item.className=`review-item ${change.type}`;const badge=document.createElement('span');badge.className='review-badge';badge.textContent=symbols[change.type];const copy=document.createElement('div');copy.className='review-copy';const title=document.createElement('strong');title.textContent=change.title;const detail=document.createElement('span');detail.textContent=change.detail;copy.append(title,detail);item.append(badge,copy);return item}));$('#review-dialog').showModal()
+}
+async function applyReviewedChanges(){
+ $('#review-dialog').close();const button=$('#save');button.disabled=true;button.textContent='Applying…';
+ try{const r=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(config())});const out=await r.json();if(!r.ok)throw Error(out.error||'Apply failed');baseline=snapshot();setDirty();await load();notify('Changes applied — dnsmasq reloaded')}
+ catch(e){notify(e.message,true);$('#save-note').textContent=e.message;button.disabled=false}finally{button.textContent='Apply changes'}
+}
+
 document.addEventListener('click',e=>{
  const tab=e.target.closest('[data-tab]');if(tab)showTab(tab.dataset.tab);
  const add=e.target.closest('[data-add]');if(add){state[add.dataset.add].push(add.dataset.add==='dns'?{hostname:'',ip:''}:{hostname:'',ip:'',mac:'',comment:''});render();document.querySelector(`#${add.dataset.add==='dns'?'dns':'reservation'}-rows .record:last-child input`)?.focus()}
@@ -80,6 +98,9 @@ $('#save').onclick=async()=>{
  try{const r=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(config())});const out=await r.json();if(!r.ok)throw Error(out.error||'Apply failed');baseline=snapshot();setDirty();await load();notify('Changes applied — dnsmasq reloaded')}
  catch(e){notify(e.message,true);$('#save-note').textContent=e.message;button.disabled=false}finally{button.textContent='Apply changes'}
 };
+$('#save').onclick=openReview;
+$('#review-confirm').onclick=applyReviewedChanges;
+$('#review-cancel').onclick=$('#review-close').onclick=()=>$('#review-dialog').close();
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
 window.addEventListener('pagehide',()=>logSource?.close());
 load();setInterval(()=>{if(!dirty)load()},30000);
