@@ -28,6 +28,27 @@ class ConfigTests(unittest.TestCase):
         ])
         self.assertEqual(text.count("service.home"), 2)
 
+    def test_tuning_round_trip(self):
+        settings = {"cacheSize": 1200, "clearOnReload": True, "domainNeeded": True, "bogusPriv": True,
+                    "stopDnsRebind": True, "upstreamMode": "custom", "upstreamServers": ["1.1.1.1", "9.9.9.9"],
+                    "rebindExceptions": ["plex.home"]}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "settings.conf"
+            path.write_text(app.render_tuning(settings))
+            self.assertEqual(app.read_tuning(path), settings)
+
+    def test_tuning_rejects_invalid_cache(self):
+        with self.assertRaises(ValueError):
+            app.render_tuning({"cacheSize": 10001})
+
+    def test_tuning_requires_custom_server(self):
+        with self.assertRaises(ValueError):
+            app.render_tuning({"upstreamMode": "custom", "upstreamServers": []})
+
+    def test_unknown_dnsmasq_action_rejected(self):
+        with self.assertRaises(ValueError):
+            app.dnsmasq_action(None, "run-anything")
+
     def test_read_dns(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "dns.conf"

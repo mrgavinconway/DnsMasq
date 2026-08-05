@@ -1,5 +1,5 @@
 let state={reservations:[],dns:[],leases:[]};
-let baseline='',dirty=false,toastTimer,logSource=null,logPaused=false,updatePoll=null,logLines=[],logQuery='',logService='all';
+let baseline='',dirty=false,settingsDirty=false,settingsLoaded=false,tuning={},tuningBaseline='',reviewAction=null,toastTimer,logSource=null,logPaused=false,updatePoll=null,logLines=[],logQuery='',logService='all';
 let leaseSort={key:'hostname',direction:1};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -38,7 +38,7 @@ async function load(showNotice=false){
  try{const r=await fetch('/api/state',{cache:'no-store'});if(!r.ok)throw Error('Could not reach the service');state=await r.json();baseline=snapshot();render();$('#status').innerHTML='<span></span>dnsmasq online';$('#status').className='status ok';$('#updated').textContent=`Updated ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;if(showNotice)notify('Network data refreshed')}
  catch(e){$('#status').innerHTML=`<span></span>${esc(e.message)}`;$('#status').className='status bad';notify(e.message,true)}finally{refresh.disabled=false}
 }
-function showTab(name){document.querySelectorAll('nav button,.panel').forEach(x=>x.classList.remove('active'));document.querySelector(`[data-tab="${name}"]`).classList.add('active');$('#'+name).classList.add('active');if(name==='logs'){if(!logPaused)startLogs();checkUpdate()}}
+function showTab(name){document.querySelectorAll('nav button,.panel').forEach(x=>x.classList.remove('active'));document.querySelector(`[data-tab="${name}"]`).classList.add('active');$('#'+name).classList.add('active');if(name==='logs'){if(!logPaused)startLogs();checkUpdate()}if(name==='system'&&!settingsLoaded)loadSettings()}
 function addReservation(button){const mac=button.dataset.mac,ip=button.dataset.ip,hostname=button.dataset.host||'';state.reservations.push({hostname,ip,mac,comment:''});render();showTab('reservations');const input=document.querySelector('#reservation-rows .record:last-child input');input?.focus();notify(`${hostname||ip} added as a reservation`)}
 function logStatus(message,state=''){$('#log-status').className=state;$('#log-status').innerHTML=`<i></i>${esc(message)}`;$('#log-live').textContent=state==='connected'?'Live':state==='disconnected'?'Retrying':'Paused'}
 function logRow(line){const row=document.createElement('div');row.className=`log-line${/error|failed|failure|fatal/i.test(line)?' error':/warn|denied|timeout/i.test(line)?' warning':''}`;row.textContent=line;return row}
@@ -56,6 +56,16 @@ async function checkUpdate(quiet=false){
 }
 async function applyUpdate(){if(dirty){notify('Apply or discard configuration changes first',true);return}if(!confirm('Install the latest version and restart the web interface?'))return;$('#update-apply').disabled=true;$('.update-card').className='update-card updating';$('#update-message').textContent='Starting update…';try{const r=await fetch('/api/update',{method:'POST'});const out=await r.json();if(!r.ok)throw Error(out.error||'Could not start update');clearTimeout(updatePoll);updatePoll=setTimeout(()=>checkUpdate(true),1500)}catch(e){notify(e.message,true);checkUpdate(true)}}
 
+function settingsForm(){return{cacheSize:Number($('#setting-cache').value),clearOnReload:$('#setting-clear').checked,domainNeeded:$('#setting-domain').checked,bogusPriv:$('#setting-bogus').checked,stopDnsRebind:$('#setting-rebind').checked,upstreamMode:$('#setting-upstream-mode').value,upstreamServers:$('#setting-upstream').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean),rebindExceptions:$('#setting-exceptions').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean)}}
+function renderSettings(){tuningBaseline=JSON.stringify(tuning);$('#setting-cache').value=tuning.cacheSize;$('#setting-clear').checked=tuning.clearOnReload;$('#setting-domain').checked=tuning.domainNeeded;$('#setting-bogus').checked=tuning.bogusPriv;$('#setting-rebind').checked=tuning.stopDnsRebind;$('#setting-upstream-mode').value=tuning.upstreamMode;$('#setting-upstream').value=(tuning.upstreamServers||[]).join('\n');$('#setting-exceptions').value=(tuning.rebindExceptions||[]).join('\n');toggleUpstream();setSettingsDirty()}
+async function loadSettings(){try{const r=await fetch('/api/settings',{cache:'no-store'});if(!r.ok)throw Error('Could not load settings');tuning=await r.json();settingsLoaded=true;renderSettings()}catch(e){notify(e.message,true)}}
+function toggleUpstream(){$('#upstream-servers-wrap').classList.toggle('hidden',$('#setting-upstream-mode').value!=='custom')}
+function setSettingsDirty(){settingsDirty=settingsLoaded&&JSON.stringify(settingsForm())!==tuningBaseline;$('#settings-review').disabled=!settingsDirty}
+function showReview(changes,action){const list=$('#review-list'),symbols={add:'+',remove:'−',change:'~'};reviewAction=action;list.replaceChildren(...changes.map(change=>{const item=document.createElement('div');item.className=`review-item ${change.type}`;const badge=document.createElement('span');badge.className='review-badge';badge.textContent=symbols[change.type];const copy=document.createElement('div');copy.className='review-copy';const title=document.createElement('strong');title.textContent=change.title;const detail=document.createElement('span');detail.textContent=change.detail;copy.append(title,detail);item.append(badge,copy);return item}));$('#review-dialog').showModal()}
+function openSettingsReview(){const next=settingsForm(),before=JSON.parse(tuningBaseline),labels={cacheSize:'Cache size',clearOnReload:'Clear cache on upstream change',domainNeeded:'Keep single-label names local',bogusPriv:'Block private reverse lookups',stopDnsRebind:'DNS rebinding protection',upstreamMode:'Upstream DNS mode',upstreamServers:'Upstream DNS servers',rebindExceptions:'Rebinding exceptions'},changes=[];for(const key of Object.keys(labels)){const oldValue=Array.isArray(before[key])?before[key].join(', ')||'None':String(before[key]),newValue=Array.isArray(next[key])?next[key].join(', ')||'None':String(next[key]);if(oldValue!==newValue)changes.push({type:'change',title:labels[key],detail:`${oldValue} → ${newValue}`})}showReview(changes,applySettings)}
+async function applySettings(){$('#review-dialog').close();const button=$('#settings-review');button.disabled=true;button.textContent='Applying…';try{const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(settingsForm())});const out=await r.json();if(!r.ok)throw Error(out.error||'Settings failed');await loadSettings();notify('DNS settings applied and dnsmasq restarted')}catch(e){notify(e.message,true);button.disabled=false}finally{button.textContent='Review settings'}}
+async function runAction(action){if((action==='restart'||action==='clear-cache')&&!confirm(action==='restart'?'Restart dnsmasq now?':'Clear the DNS cache and reload local records?'))return;const button=document.querySelector(`[data-action="${action}"]`);button.disabled=true;try{const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});const out=await r.json();if(!r.ok)throw Error(out.error||'Action failed');notify(out.message);if(action==='cache-stats'){showTab('logs');$('#log-source').value='dnsmasq';logService='dnsmasq';renderLogs()}}catch(e){notify(e.message,true)}finally{button.disabled=false}}
+
 function describeReservation(row){return`${row.hostname||'Unnamed'} · ${row.ip} · ${row.mac}`}
 function buildChanges(){
  const before=JSON.parse(baseline||'{"reservations":[],"dns":[]}'),changes=[],oldReservations=new Map(before.reservations.map(row=>[row.mac.toLowerCase(),row])),newReservations=new Map(state.reservations.map(row=>[row.mac.toLowerCase(),row]));
@@ -66,7 +76,7 @@ function buildChanges(){
 }
 function openReview(){
  const invalid=[...document.querySelectorAll('.record input:not([data-optional])')].filter(x=>!x.value.trim());invalid.forEach(x=>x.classList.add('invalid'));if(invalid.length){invalid[0].focus();notify('Complete all required fields before applying',true);return}
- const list=$('#review-list'),symbols={add:'+',remove:'−',change:'~'};list.replaceChildren(...buildChanges().map(change=>{const item=document.createElement('div');item.className=`review-item ${change.type}`;const badge=document.createElement('span');badge.className='review-badge';badge.textContent=symbols[change.type];const copy=document.createElement('div');copy.className='review-copy';const title=document.createElement('strong');title.textContent=change.title;const detail=document.createElement('span');detail.textContent=change.detail;copy.append(title,detail);item.append(badge,copy);return item}));$('#review-dialog').showModal()
+ showReview(buildChanges(),applyReviewedChanges)
 }
 async function applyReviewedChanges(){
  $('#review-dialog').close();const button=$('#save');button.disabled=true;button.textContent='Applying…';
@@ -91,6 +101,10 @@ $('#log-filter').addEventListener('keydown',e=>{if(e.key==='Enter')$('#log-searc
 $('#log-source').onchange=e=>{logService=e.target.value;renderLogs()};
 $('#update-check').onclick=()=>checkUpdate();
 $('#update-apply').onclick=applyUpdate;
+document.querySelectorAll('#system input,#system textarea,#system select').forEach(input=>input.addEventListener('input',setSettingsDirty));
+$('#setting-upstream-mode').addEventListener('change',()=>{toggleUpstream();setSettingsDirty()});
+document.querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',()=>runAction(button.dataset.action)));
+$('#settings-review').onclick=openSettingsReview;
 $('#discard').onclick=()=>load().then(()=>notify('Changes discarded'));
 $('#save').onclick=async()=>{
  const invalid=[...document.querySelectorAll('.record input:not([data-optional])')].filter(x=>!x.value.trim());invalid.forEach(x=>x.classList.add('invalid'));if(invalid.length){invalid[0].focus();notify('Complete all required fields before applying',true);return}
@@ -99,8 +113,8 @@ $('#save').onclick=async()=>{
  catch(e){notify(e.message,true);$('#save-note').textContent=e.message;button.disabled=false}finally{button.textContent='Apply changes'}
 };
 $('#save').onclick=openReview;
-$('#review-confirm').onclick=applyReviewedChanges;
+$('#review-confirm').onclick=()=>reviewAction?.();
 $('#review-cancel').onclick=$('#review-close').onclick=()=>$('#review-dialog').close();
-window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+window.addEventListener('beforeunload',e=>{if(dirty||settingsDirty){e.preventDefault();e.returnValue=''}});
 window.addEventListener('pagehide',()=>logSource?.close());
 load();setInterval(()=>{if(!dirty)load()},30000);

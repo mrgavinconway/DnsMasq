@@ -37,6 +37,7 @@ REPOSITORY = os.getenv("DNSMASQ_WEB_REPOSITORY", "https://github.com/mrgavinconw
 class Settings:
     reservations: Path
     dns: Path
+    tuning: Path
     leases: Path
     dnsmasq: str
     restart: list[str]
@@ -320,6 +321,92 @@ def render_dns(rows: list[dict[str, object]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def read_tuning(path: Path) -> dict[str, object]:
+    values: dict[str, object] = {"cacheSize": 150, "clearOnReload": False, "domainNeeded": False,
+                                 "bogusPriv": False, "stopDnsRebind": False, "upstreamMode": "automatic",
+                                 "upstreamServers": [], "rebindExceptions": []}
+    if not path.exists():
+        return values
+    servers, exceptions = [], []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith("cache-size="):
+            try: values["cacheSize"] = int(line.split("=", 1)[1])
+            except ValueError: pass
+        elif line == "clear-on-reload": values["clearOnReload"] = True
+        elif line == "domain-needed": values["domainNeeded"] = True
+        elif line == "bogus-priv": values["bogusPriv"] = True
+        elif line == "stop-dns-rebind": values["stopDnsRebind"] = True
+        elif line == "no-resolv": values["upstreamMode"] = "custom"
+        elif line.startswith("server="): servers.append(line.split("=", 1)[1])
+        elif line.startswith("rebind-domain-ok="):
+            exceptions.extend(part for part in line.split("=", 1)[1].strip("/").split("/") if part)
+    values["upstreamServers"], values["rebindExceptions"] = servers, exceptions
+    return values
+
+
+def render_tuning(values: dict[str, object]) -> str:
+    try: cache_size = int(values.get("cacheSize", 150))
+    except (TypeError, ValueError): raise ValueError("Cache size must be a number")
+    if not 0 <= cache_size <= 10000:
+        raise ValueError("Cache size must be between 0 and 10,000")
+    lines = ["# Managed by dnsmasq-web. Manual changes may be overwritten.", f"cache-size={cache_size}"]
+    for key, option in (("clearOnReload", "clear-on-reload"), ("domainNeeded", "domain-needed"),
+                        ("bogusPriv", "bogus-priv"), ("stopDnsRebind", "stop-dns-rebind")):
+        if values.get(key) is True: lines.append(option)
+    mode = values.get("upstreamMode", "automatic")
+    if mode not in ("automatic", "custom"): raise ValueError("Invalid upstream DNS mode")
+    servers = values.get("upstreamServers", [])
+    if not isinstance(servers, list): raise ValueError("Upstream servers must be a list")
+    if mode == "custom":
+        if not servers: raise ValueError("Add at least one upstream DNS server")
+        lines.append("no-resolv")
+        for server in servers: lines.append(f"server={valid_ip(server)}")
+    exceptions = values.get("rebindExceptions", [])
+    if not isinstance(exceptions, list): raise ValueError("Rebind exceptions must be a list")
+    cleaned = [valid_name(item) for item in exceptions if str(item).strip()]
+    if cleaned: lines.append(f"rebind-domain-ok=/{'/'.join(cleaned)}/")
+    return "\n".join(lines) + "\n"
+
+
+def atomic_tuning_apply(settings: Settings, content: str) -> None:
+    target = settings.tuning
+    target.parent.mkdir(parents=True, exist_ok=True)
+    backup = target.read_bytes() if target.exists() else None
+    fd, name = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
+    temp = Path(name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(content); handle.flush(); os.fsync(handle.fileno())
+        os.chmod(temp, 0o644); os.replace(temp, target)
+        result = subprocess.run([settings.dnsmasq, "--test"], text=True, capture_output=True, timeout=10)
+        if result.returncode: raise RuntimeError((result.stderr or result.stdout or "dnsmasq validation failed").strip())
+        subprocess.run(["systemctl", "restart", "dnsmasq"], check=True, text=True, capture_output=True, timeout=15)
+    except Exception:
+        if backup is None: target.unlink(missing_ok=True)
+        else: target.write_bytes(backup)
+        subprocess.run(["systemctl", "restart", "dnsmasq"], text=True, capture_output=True, timeout=15)
+        raise
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def dnsmasq_action(settings: Settings, action: str) -> str:
+    if action == "validate":
+        result = subprocess.run([settings.dnsmasq, "--test"], text=True, capture_output=True, timeout=10)
+        if result.returncode: raise RuntimeError((result.stderr or result.stdout).strip())
+        return (result.stderr or result.stdout or "Configuration is valid").strip()
+    if action in ("clear-cache", "cache-stats"):
+        signal = "HUP" if action == "clear-cache" else "USR1"
+        subprocess.run(["systemctl", "kill", f"--signal={signal}", "dnsmasq"], check=True,
+                       text=True, capture_output=True, timeout=10)
+        return "DNS cache cleared and local files reloaded" if action == "clear-cache" else "Cache statistics written to the dnsmasq log"
+    if action == "restart":
+        subprocess.run(["systemctl", "restart", "dnsmasq"], check=True, text=True, capture_output=True, timeout=15)
+        return "dnsmasq restarted successfully"
+    raise ValueError("Unknown dnsmasq action")
+
+
 def atomic_apply(settings: Settings, reservations: str, dns: str) -> None:
     settings.reservations.parent.mkdir(parents=True, exist_ok=True)
     backups: dict[Path, bytes | None] = {}
@@ -412,6 +499,9 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/update":
             self.reply(200, update_info())
             return
+        if parsed.path == "/api/settings":
+            self.reply(200, read_tuning(self.settings.tuning))
+            return
         if parsed.path == "/api/state":
             self.reply(200, {"reservations": read_reservations(self.settings.reservations),
                              "dns": read_dns(self.settings.dns),
@@ -421,7 +511,16 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path != "/api/update":
+        path = urlparse(self.path).path
+        if path == "/api/action":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                body = json.loads(self.rfile.read(min(length, 10_000)))
+                self.reply(200, {"ok": True, "message": dnsmasq_action(self.settings, body.get("action", ""))})
+            except (ValueError, json.JSONDecodeError) as exc: self.reply(400, {"error": str(exc)})
+            except Exception as exc: self.reply(500, {"error": str(exc)})
+            return
+        if path != "/api/update":
             self.reply(404, {"error": "Not found"}); return
         try:
             self.reply(202, {"ok": True, "unit": start_update()})
@@ -431,7 +530,18 @@ class Handler(SimpleHTTPRequestHandler):
             self.reply(500, {"error": str(exc)})
 
     def do_PUT(self) -> None:
-        if urlparse(self.path).path != "/api/config":
+        path = urlparse(self.path).path
+        if path == "/api/settings":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 100_000: raise ValueError("Request is too large")
+                body = json.loads(self.rfile.read(length)); content = render_tuning(body)
+                with LOCK: atomic_tuning_apply(self.settings, content)
+                self.reply(200, {"ok": True})
+            except (ValueError, json.JSONDecodeError) as exc: self.reply(400, {"error": str(exc)})
+            except Exception as exc: self.reply(500, {"error": str(exc)})
+            return
+        if path != "/api/config":
             self.reply(404, {"error": "Not found"}); return
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -454,6 +564,7 @@ def main() -> None:
     args = parser.parse_args()
     settings = Settings(Path(os.getenv("DNSMASQ_WEB_RESERVATIONS", "/etc/homelan-reservations")),
                         Path(os.getenv("DNSMASQ_WEB_DNS", "/etc/homelan-hosts")),
+                        Path(os.getenv("DNSMASQ_WEB_SETTINGS", "/etc/dnsmasq.d/web-settings.conf")),
                         Path(os.getenv("DNSMASQ_WEB_LEASES", "/var/lib/misc/dnsmasq.leases")),
                         os.getenv("DNSMASQ_WEB_BINARY", shutil.which("dnsmasq") or "/usr/sbin/dnsmasq"),
                         os.getenv("DNSMASQ_WEB_RESTART", "systemctl reload-or-restart dnsmasq").split())

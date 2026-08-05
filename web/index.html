@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/log-filter.css?v=1">
   <link rel="stylesheet" href="/review.css?v=1">
   <link rel="stylesheet" href="/editor-tables.css?v=1">
+  <link rel="stylesheet" href="/system.css?v=1">
 </head>
 <body>
 <main>
@@ -40,6 +41,7 @@
     <button class="active" data-tab="leases">Leases</button>
     <button data-tab="reservations">Reservations</button>
     <button data-tab="dns">DNS records</button>
+    <button data-tab="system">System</button>
     <button data-tab="logs">Logs <span id="log-live" class="nav-live">Live</span></button>
   </nav>
 
@@ -57,6 +59,31 @@
   <section id="dns" class="panel">
     <div class="panel-head"><div><h2>Local DNS records</h2><p>Friendly names resolved inside your home network.</p></div><button class="primary" data-add="dns">Add record</button></div>
     <div class="table-wrap editor-table"><table><thead><tr><th>Hostname</th><th>IP address</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="dns-rows"></tbody></table></div>
+  </section>
+
+  <section id="system" class="panel">
+    <div class="panel-head"><div><h2>dnsmasq controls</h2><p>Safe maintenance actions and DNS behaviour.</p></div></div>
+    <div class="operation-grid">
+      <button class="operation" data-action="clear-cache"><span class="operation-icon">↻</span><strong>Clear DNS cache</strong><small>Also reload local hosts and reservations</small></button>
+      <button class="operation" data-action="cache-stats"><span class="operation-icon">≡</span><strong>Report cache statistics</strong><small>Write current usage to the dnsmasq log</small></button>
+      <button class="operation" data-action="validate"><span class="operation-icon">✓</span><strong>Validate configuration</strong><small>Check every dnsmasq configuration file</small></button>
+      <button class="operation danger-operation" data-action="restart"><span class="operation-icon">⏻</span><strong>Restart dnsmasq</strong><small>Briefly interrupt local DNS and DHCP</small></button>
+    </div>
+    <div class="settings-card">
+      <div class="settings-head"><div><p class="eyebrow">ADVANCED DNS</p><h2>Resolver settings</h2><p>Conservative defaults for a home network.</p></div><button class="primary" id="settings-review" disabled>Review settings</button></div>
+      <div class="settings-grid">
+        <label class="setting-number"><span><strong>Cache size</strong><small>Number of DNS answers retained in memory</small></span><input id="setting-cache" type="number" min="0" max="10000" step="50"></label>
+        <label class="setting-toggle"><span><strong>Clear cache on upstream change</strong><small>Discard answers when resolvers change</small></span><input id="setting-clear" type="checkbox"><i></i></label>
+        <label class="setting-toggle"><span><strong>Keep single-label names local</strong><small>Do not forward incomplete hostnames upstream</small></span><input id="setting-domain" type="checkbox"><i></i></label>
+        <label class="setting-toggle"><span><strong>Block private reverse lookups</strong><small>Keep private PTR requests off the internet</small></span><input id="setting-bogus" type="checkbox"><i></i></label>
+        <label class="setting-toggle"><span><strong>DNS rebinding protection</strong><small>Reject private addresses returned by public DNS</small></span><input id="setting-rebind" type="checkbox"><i></i></label>
+      </div>
+      <div class="resolver-grid">
+        <label><span>Upstream DNS</span><select id="setting-upstream-mode"><option value="automatic">Automatic from the OS</option><option value="custom">Use custom servers</option></select></label>
+        <label id="upstream-servers-wrap"><span>Server addresses <small>One IP address per line</small></span><textarea id="setting-upstream" rows="3" placeholder="1.1.1.1&#10;9.9.9.9"></textarea></label>
+        <label><span>Rebinding exceptions <small>One domain per line</small></span><textarea id="setting-exceptions" rows="3" placeholder="plex.home"></textarea></label>
+      </div>
+    </div>
   </section>
 
   <section id="logs" class="panel">
@@ -78,11 +105,11 @@
 </footer>
 <dialog id="review-dialog" class="review-dialog">
   <div class="review-head"><div><p class="eyebrow">REVIEW CHANGES</p><h2>Apply to dnsmasq?</h2></div><button class="review-close" id="review-close" aria-label="Cancel and close">×</button></div>
-  <p class="review-intro">These changes will be validated, written to your HomeLAN files, and followed by a dnsmasq reload.</p>
+  <p class="review-intro">These changes will be validated, written to the managed configuration, and followed by a safe dnsmasq reload or restart.</p>
   <div id="review-list" class="review-list"></div>
   <div class="review-actions"><button class="secondary" id="review-cancel">Cancel</button><button class="primary" id="review-confirm">Confirm and apply</button></div>
 </dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="/app.js?v=9"></script>
+<script src="/app.js?v=10"></script>
 </body>
 </html>
