@@ -20,6 +20,7 @@ The leases table shows each MAC address's registered manufacturer and vendor nam
 The Logs tab streams recent and live journal entries from `dnsmasq.service` and `dnsmasq-web.service`. It keeps at most 1,000 lines in the browser and supports filtering by service, text searching, pausing, and clearing the view without changing the system journal.
 
 Lease columns can be sorted in either direction by selecting their headings. DHCP reservations support optional comments, stored as encoded metadata comments beside the corresponding dnsmasq entry so the reservation file remains valid.
+Reservations and DNS records use the same compact table layout as leases, with aligned columns and inline editing.
 
 Applying configuration opens a review that lists every addition, removal, and reservation modification. The review can be cancelled without losing the edits; dnsmasq is untouched until the change is explicitly confirmed.
 

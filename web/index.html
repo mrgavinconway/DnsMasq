@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/enhancements.css?v=1">
   <link rel="stylesheet" href="/log-filter.css?v=1">
   <link rel="stylesheet" href="/review.css?v=1">
+  <link rel="stylesheet" href="/editor-tables.css?v=1">
 </head>
 <body>
 <main>
@@ -50,12 +51,12 @@
 
   <section id="reservations" class="panel">
     <div class="panel-head"><div><h2>DHCP reservations</h2><p>Keep important devices at a predictable address.</p></div><button class="primary" data-add="reservations">Add reservation</button></div>
-    <div id="reservation-rows" class="cards"></div>
+    <div class="table-wrap editor-table"><table><thead><tr><th>Hostname</th><th>IP address</th><th>MAC address</th><th>Comment</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="reservation-rows"></tbody></table></div>
   </section>
 
   <section id="dns" class="panel">
     <div class="panel-head"><div><h2>Local DNS records</h2><p>Friendly names resolved inside your home network.</p></div><button class="primary" data-add="dns">Add record</button></div>
-    <div id="dns-rows" class="cards"></div>
+    <div class="table-wrap editor-table"><table><thead><tr><th>Hostname</th><th>IP address</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="dns-rows"></tbody></table></div>
   </section>
 
   <section id="logs" class="panel">
@@ -82,6 +83,6 @@
   <div class="review-actions"><button class="secondary" id="review-cancel">Cancel</button><button class="primary" id="review-confirm">Confirm and apply</button></div>
 </dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="/app.js?v=8"></script>
+<script src="/app.js?v=9"></script>
 </body>
 </html>

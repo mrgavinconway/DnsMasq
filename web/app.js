@@ -16,7 +16,7 @@ function renderHealth(){
 }
 function notify(message,error=false){const el=$('#toast');el.textContent=message;el.className=`toast show${error?' error':''}`;clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.className='toast',2800)}
 function setDirty(){dirty=snapshot()!==baseline;$('#dirty').textContent=dirty?'Changes ready to apply':'No unsaved changes';$('#save-note').textContent=dirty?'Review then apply to dnsmasq':'dnsmasq is up to date';$('#save').disabled=!dirty;$('#discard').disabled=!dirty}
-function field(label,key,value,placeholder,optional=false){return`<div class="field"><label>${label}</label><input data-key="${key}" ${optional?'data-optional="true"':''} value="${esc(value)}" placeholder="${placeholder}" autocomplete="off"></div>`}
+function tableField(label,key,value,placeholder,optional=false){return`<td><input aria-label="${label}" data-key="${key}" ${optional?'data-optional="true"':''} value="${esc(value)}" placeholder="${placeholder}" autocomplete="off"></td>`}
 function isReserved(lease){return state.reservations.some(r=>r.mac.toLowerCase()===lease.mac.toLowerCase()||r.ip===lease.ip)}
 function filteredLeases(){const q=$('#lease-filter').value.trim().toLowerCase(),rows=q?state.leases.filter(x=>[x.hostname,x.ip,x.mac,x.vendor].some(v=>String(v).toLowerCase().includes(q))):[...state.leases];return rows.sort((a,b)=>{const av=a[leaseSort.key]??'',bv=b[leaseSort.key]??'';const result=typeof av==='number'?av-bv:String(av).localeCompare(String(bv),undefined,{numeric:true,sensitivity:'base'});return result*leaseSort.direction})}
 
@@ -29,8 +29,8 @@ function render(){
  $('#lease-count').textContent=state.leases.length;$('#reservation-count').textContent=state.reservations.length;$('#dns-count').textContent=state.dns.length;
  renderHealth();
  renderLeases();
- $('#reservation-rows').innerHTML=state.reservations.map((x,i)=>`<div class="record" data-index="${i}" data-kind="reservations">${field('Hostname','hostname',x.hostname,'printer')}${field('IP address','ip',x.ip,'192.168.1.20')}${field('MAC address','mac',x.mac,'aa:bb:cc:dd:ee:ff')}${field('Comment','comment',x.comment||'','Office printer',true)}<button class="remove" aria-label="Remove ${esc(x.hostname||'reservation')}">Remove</button></div>`).join('')||'<div class="empty">No reservations yet. Reserve a live device or add one manually.</div>';
- $('#dns-rows').innerHTML=state.dns.map((x,i)=>`<div class="record dns" data-index="${i}" data-kind="dns">${field('Hostname','hostname',x.hostname,'nas.home')}${field('IP address','ip',x.ip,'192.168.1.10')}<button class="remove" aria-label="Remove ${esc(x.hostname||'DNS record')}">Remove</button></div>`).join('')||'<div class="empty">No local DNS records yet.</div>';
+ $('#reservation-rows').innerHTML=state.reservations.map((x,i)=>`<tr class="record" data-index="${i}" data-kind="reservations">${tableField('Hostname','hostname',x.hostname,'printer')}${tableField('IP address','ip',x.ip,'192.168.1.20')}${tableField('MAC address','mac',x.mac,'aa:bb:cc:dd:ee:ff')}${tableField('Comment','comment',x.comment||'','Office printer',true)}<td><button class="remove" aria-label="Remove ${esc(x.hostname||'reservation')}">Remove</button></td></tr>`).join('')||'<tr class="empty-row"><td colspan="5">No reservations yet. Reserve a live device or add one manually.</td></tr>';
+ $('#dns-rows').innerHTML=state.dns.map((x,i)=>`<tr class="record" data-index="${i}" data-kind="dns">${tableField('Hostname','hostname',x.hostname,'nas.home')}${tableField('IP address','ip',x.ip,'192.168.1.10')}<td><button class="remove" aria-label="Remove ${esc(x.hostname||'DNS record')}">Remove</button></td></tr>`).join('')||'<tr class="empty-row"><td colspan="3">No local DNS records yet.</td></tr>';
  setDirty();
 }
 async function load(showNotice=false){
