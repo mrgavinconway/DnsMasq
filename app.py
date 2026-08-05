@@ -29,7 +29,7 @@ LOCK = threading.Lock()
 OUI_LOCK = threading.Lock()
 OUI_CACHE: dict[str, str] | None = None
 UPDATE_LOCK = threading.Lock()
-UPDATE_STATUS = Path("/run/dnsmasq-web-update.json")
+UPDATE_STATUS = Path("/run/dnsmasq-web/update.json")
 REPOSITORY = os.getenv("DNSMASQ_WEB_REPOSITORY", "https://github.com/mrgavinconway/DnsMasq.git")
 
 

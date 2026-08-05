@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-STATUS=/run/dnsmasq-web-update.json
+STATUS=/run/dnsmasq-web/update.json
 REPOSITORY=${DNSMASQ_WEB_REPOSITORY:-https://github.com/mrgavinconway/DnsMasq.git}
 WORK_DIR=$(mktemp -d /tmp/dnsmasq-web-update.XXXXXX)
 finished=0
